@@ -1,10 +1,58 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 
-/**
- * Minimal reference implementation of the Andrey screen flow (see SPEC.md).
- * AI Studio Build should expand this into the real UI, following SPEC.md.
- */
+const BLUEPRINT_LABELS: Record<string, string> = {
+  bike: "Модель велосипеда",
+  speeds: "Количество скоростей",
+  chainring_layout: "Передние звезды",
+  cassette_interface: "Барабан / кассета",
+  derailleur_mount: "Крепление переключателя",
+  rear_derailleur: "Задний переключатель",
+  chain_spec: "Спецификация цепи",
+  groupset: "Групсет",
+  brake_type: "Тип тормозов",
+  brake_mount: "Крепление тормозов",
+  rotor_front_mm: "Передний ротор (мм)",
+  rotor_rear_mm: "Задний ротор (мм)",
+  brake_fluid: "Тормозная жидкость",
+  brake_pad_shape: "Форма колодок",
+  bb_shell: "Кареточный узел",
+  headset: "Рулевая колонка",
+  seatpost_diameter_mm: "Диаметр подседельного штыря (мм)",
+  wheel_size: "Размер колес",
+  front_axle: "Передняя ось",
+  rear_axle: "Задняя ось",
+  max_tire_width: "Максимальная ширина покрышек",
+  frame_type: "Тип рамы",
+  frame_material: "Материал рамы",
+  source_note: "Источник данных",
+};
+
+function humanKey(key: string): string {
+  if (BLUEPRINT_LABELS[key]) return BLUEPRINT_LABELS[key];
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+function formatConfidence(conf: any): number {
+  if (typeof conf !== "number") return 0;
+  return conf <= 1 ? Math.round(conf * 100) : Math.round(conf);
+}
+
+function tierName(tier?: number): string {
+  if (tier === 1) return "1 (Простая)";
+  if (tier === 2) return "2 (Обычная)";
+  if (tier === 3) return "3 (Экспертная)";
+  return tier ? String(tier) : "";
+}
+
 export default function App() {
   const [contract, setContract] = useState<any>(null);
   const [health, setHealth] = useState<"checking" | "ok" | "fail">("checking");
@@ -17,6 +65,12 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [savedSession, setSavedSession] = useState<{ result: any; model: string; symptom: string } | null>(null);
+  const [dismissedResume, setDismissedResume] = useState(false);
+
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   async function checkHealth() {
     setHealth("checking");
@@ -32,11 +86,35 @@ export default function App() {
     }
   }
 
+  // Initial load: check health, capture guidance, check saved session in localStorage
   useEffect(() => {
     checkHealth();
     api.capture().then(setContract).catch((e) => setErr(String(e)));
+
+    try {
+      const raw = localStorage.getItem("andrey_saved_session");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.result) {
+          setSavedSession(parsed);
+        }
+      }
+    } catch {}
   }, []);
 
+  // Save session when result updates
+  useEffect(() => {
+    if (result) {
+      try {
+        localStorage.setItem(
+          "andrey_saved_session",
+          JSON.stringify({ result, model, symptom, ts: Date.now() })
+        );
+      } catch {}
+    }
+  }, [result, model, symptom]);
+
+  // Long-running analysis timer
   useEffect(() => {
     let timer: any = null;
     if (busy) {
@@ -96,18 +174,75 @@ export default function App() {
     setErr(null);
     setResult(null);
     setElapsedSeconds(0);
+    setSavedSession(null);
+    try {
+      localStorage.removeItem("andrey_saved_session");
+    } catch {}
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function restoreSavedSession() {
+    if (!savedSession) return;
+    setResult(savedSession.result);
+    setModel(savedSession.model || "");
+    setSymptom(savedSession.symptom || "");
+    setSavedSession(null);
+  }
+
+  function handleAddFiles(newFiles: FileList | null) {
+    if (!newFiles || newFiles.length === 0) return;
+    setFiles((prev) => [...prev, ...Array.from(newFiles)]);
+  }
+
+  function handleRemoveFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   const passport = result?.passport;
   const verdict = result?.verdict;
   const ticket = result?.ticket;
 
-  function tierName(tier?: number) {
-    if (tier === 1) return "1 (Простая)";
-    if (tier === 2) return "2 (Обычная)";
-    if (tier === 3) return "3 (Экспертная)";
-    return tier ? String(tier) : "";
+  // Round capping logic: when round_no >= 2, stop asking for clarifiers and show the best cause fork
+  const roundNo = verdict?.round_no ?? 0;
+  const isCapReached = roundNo >= 2;
+  const showFork = verdict?.gate === "verdict" || isCapReached;
+
+  // Best cause for fallback fork
+  const bestCause = (verdict?.causes || [])
+    .slice()
+    .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))[0];
+
+  const diyOption = verdict?.diy || (isCapReached && {
+    label: bestCause?.label || "Самостоятельный ремонт",
+    tier: 2,
+    price_text: verdict?.jobs?.[0]?.group === "Простая" ? "50 ₽" : verdict?.jobs?.[0]?.group === "Экспертная" ? "150 ₽" : "100 ₽",
+    price_rub: verdict?.jobs?.[0]?.group === "Простая" ? 50 : verdict?.jobs?.[0]?.group === "Экспертная" ? 150 : 100,
+  });
+
+  const workshopOption = verdict?.workshop || (isCapReached && {
+    detail: verdict?.jobs?.[0]?.name || bestCause?.label || "Ремонт в мастерской",
+    price_text: verdict?.jobs?.[0]?.price_text || "По прайсу мастерской",
+  });
+
+  const guaranteeText = verdict?.guarantee || "Если не получится доделать самому, вся сумма за AI-гид зачитывается как скидка на визит в мастерскую.";
+
+  function copyTicket() {
+    if (!ticket) return;
+    const lines = [
+      "=== Заявка в мастерскую hi5.bike ===",
+      ticket.bike_summary ? `Велосипед: ${ticket.bike_summary}` : "",
+      ticket.fault_codes ? `Коды неисправностей: ${Array.isArray(ticket.fault_codes) ? ticket.fault_codes.join(", ") : ticket.fault_codes}` : "",
+      ticket.detected_specs ? `Параметры: ${typeof ticket.detected_specs === "object" ? JSON.stringify(ticket.detected_specs, null, 2) : ticket.detected_specs}` : "",
+      ticket.paid_ar_credit_rub !== undefined ? `Зачтено за AI-гид: ${ticket.paid_ar_credit_rub} ₽` : "",
+      ticket.customer_note ? `Примечание клиента: ${ticket.customer_note}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    navigator.clipboard.writeText(lines).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   return (
@@ -133,6 +268,29 @@ export default function App() {
           </span>
         )}
       </header>
+
+      {/* Resume last result banner */}
+      {!result && savedSession && !dismissedResume && (
+        <aside className="resume-banner">
+          <div>
+            Найдена сохраненная сессия диагностики
+            {savedSession.model ? ` (${savedSession.model})` : ""}.
+          </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <button type="button" onClick={restoreSavedSession}>
+              Восстановить последний диагноз
+            </button>
+            <button
+              type="button"
+              className="btn-dismiss"
+              onClick={() => setDismissedResume(true)}
+              title="Закрыть"
+            >
+              ×
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* 1. Capture guidance */}
       <section className="card">
@@ -164,16 +322,89 @@ export default function App() {
             disabled={busy}
           />
         </label>
-        <label>
-          Фото или видео узла
+
+        {/* Phone capture UX: Two dedicated buttons */}
+        <label>Фото и видео узла</label>
+        <div className="capture-grid">
           <input
+            ref={videoInputRef}
             type="file"
-            multiple
-            accept="image/*,video/*"
-            onChange={(e) => setFiles(Array.from(e.target.files || []))}
-            disabled={busy}
+            accept="video/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              handleAddFiles(e.target.files);
+              e.target.value = "";
+            }}
           />
-        </label>
+          <button
+            type="button"
+            className="btn-upload"
+            onClick={() => videoInputRef.current?.click()}
+            disabled={busy}
+          >
+            <span style={{ fontSize: "20px" }}>🎥</span>
+            <span>Снять / выбрать видео</span>
+          </button>
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              handleAddFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="btn-upload"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={busy}
+          >
+            <span style={{ fontSize: "20px" }}>📷</span>
+            <span>Добавить фото</span>
+          </button>
+        </div>
+
+        {/* Chosen files list with thumbnails and remove buttons */}
+        {files.length > 0 && (
+          <div className="file-list">
+            {files.map((file, idx) => {
+              const isImage = file.type.startsWith("image/");
+              const thumbUrl = isImage ? URL.createObjectURL(file) : null;
+              return (
+                <div key={idx} className="file-item">
+                  <div className="file-item-info">
+                    {thumbUrl ? (
+                      <img src={thumbUrl} alt="" className="file-thumb" />
+                    ) : (
+                      <div className="file-icon">🎬</div>
+                    )}
+                    <div style={{ overflow: "hidden" }}>
+                      <div className="file-name" title={file.name}>
+                        {file.name}
+                      </div>
+                      <div className="file-size">{formatFileSize(file.size)}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-remove"
+                    onClick={() => handleRemoveFile(idx)}
+                    title="Удалить файл"
+                    disabled={busy}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {busy && (
           <div className="progress-box">
@@ -184,7 +415,7 @@ export default function App() {
           </div>
         )}
 
-        <button onClick={run} disabled={busy}>
+        <button onClick={run} disabled={busy || (!symptom && files.length === 0)}>
           {busy ? `Андрей смотрит… (${elapsedSeconds} с)` : "Диагностировать"}
         </button>
 
@@ -198,7 +429,7 @@ export default function App() {
         )}
       </section>
 
-      {/* 3. Passport */}
+      {/* 3. Passport (Full representation, hiding empty parts) */}
       {passport && (
         <section className="card">
           <h2>3. Паспорт велосипеда</h2>
@@ -210,50 +441,105 @@ export default function App() {
             ]
               .filter((v) => v && String(v).trim() !== "")
               .join(" ");
-            return idText ? <p><b>{idText}</b></p> : null;
+            const conf = passport.identity?.confidence ?? passport.confidence;
+            return idText ? (
+              <p>
+                <b>{idText}</b>
+                {typeof conf === "number" && (
+                  <span className="guarantee" style={{ marginLeft: "8px" }}>
+                    (уверенность: {formatConfidence(conf)}%)
+                  </span>
+                )}
+              </p>
+            ) : null;
           })()}
+
           {passport.gate && (
             <span className={"gate gate-" + passport.gate}>gate: {passport.gate}</span>
           )}
-          
+
+          {/* Blueprint: non-empty only, as label/value rows */}
           {(() => {
             const blueprintEntries = Object.entries(passport.blueprint || {}).filter(
-              ([_, v]) => v !== null && v !== undefined && String(v).trim() !== "" && !(Array.isArray(v) && v.length === 0)
+              ([_, v]) =>
+                v !== null &&
+                v !== undefined &&
+                String(v).trim() !== "" &&
+                !(Array.isArray(v) && v.length === 0)
             );
             if (blueprintEntries.length === 0) return null;
             return (
               <>
-                <h3>Параметры (Blueprint)</h3>
-                <ul>
-                  {blueprintEntries.map(([k, v]) => (
-                    <li key={k}>
-                      <b>{k}</b>: {String(v)}
-                    </li>
-                  ))}
-                </ul>
+                <h3>Параметры узлов (Blueprint)</h3>
+                <table className="bp-table">
+                  <tbody>
+                    {blueprintEntries.map(([k, v]) => (
+                      <tr key={k}>
+                        <td>{humanKey(k)}</td>
+                        <td>{String(v)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </>
             );
           })()}
 
+          {/* Standards */}
           {(() => {
             const standardsEntries = Object.entries(passport.standards || {}).filter(
-              ([_, v]) => v !== null && v !== undefined && String(v).trim() !== ""
+              ([_, v]) =>
+                v !== null &&
+                v !== undefined &&
+                String(v).trim() !== "" &&
+                !(Array.isArray(v) && v.length === 0)
             );
             if (standardsEntries.length === 0) return null;
             return (
               <>
                 <h3>Стандарты</h3>
-                <ul>
-                  {standardsEntries.map(([k, v]) => (
-                    <li key={k}>
-                      <b>{k}</b>: {String(v)}
-                    </li>
-                  ))}
-                </ul>
+                <table className="bp-table">
+                  <tbody>
+                    {standardsEntries.map(([k, v]) => (
+                      <tr key={k}>
+                        <td>{humanKey(k)}</td>
+                        <td>{String(v)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </>
             );
           })()}
 
+          {/* Consumable specs */}
+          {(() => {
+            const consumableEntries = Object.entries(passport.consumable_specs || {}).filter(
+              ([_, v]) =>
+                v !== null &&
+                v !== undefined &&
+                String(v).trim() !== "" &&
+                !(Array.isArray(v) && v.length === 0)
+            );
+            if (consumableEntries.length === 0) return null;
+            return (
+              <>
+                <h3>Расходные материалы</h3>
+                <table className="bp-table">
+                  <tbody>
+                    {consumableEntries.map(([k, v]) => (
+                      <tr key={k}>
+                        <td>{humanKey(k)}</td>
+                        <td>{String(v)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            );
+          })()}
+
+          {/* Required parts */}
           {(() => {
             const parts = (passport.required_parts || []).filter(
               (p: any) => p && (typeof p !== "string" || p.trim() !== "")
@@ -271,6 +557,7 @@ export default function App() {
             );
           })()}
 
+          {/* Fit constraints */}
           {(() => {
             const constraints = (passport.fit_constraints || []).filter(
               (c: any) => c && (typeof c !== "string" || c.trim() !== "")
@@ -290,17 +577,15 @@ export default function App() {
         </section>
       )}
 
-      {/* 4. Verdict + fork */}
+      {/* 4. Verdict + Fork */}
       {verdict && (
         <section className="card">
           <h2>4. Диагноз</h2>
           <span className={"gate gate-" + (verdict.gate || "unknown")}>gate: {verdict.gate}</span>
-          
-          <h3>Причины</h3>
+
+          <h3>Вероятные причины</h3>
           {verdict.causes?.map((c: any, i: number) => {
-            const conf = typeof c.confidence === "number"
-              ? (c.confidence <= 1 ? Math.round(c.confidence * 100) : Math.round(c.confidence))
-              : 0;
+            const conf = formatConfidence(c.confidence);
             return (
               <p key={i}>
                 <b>{c.label}</b> — {conf}% {c.job_code && <span className="guarantee">({c.job_code})</span>}
@@ -308,29 +593,36 @@ export default function App() {
             );
           })}
 
-          {verdict.gate === "verdict" ? (
+          {/* 2-round cap warning if reached */}
+          {isCapReached && verdict.gate !== "verdict" && (
+            <div className="progress-box" style={{ background: "#fff8e6", borderColor: "#ffe2a8", color: "#8c4b00", margin: "14px 0" }}>
+              <b>Достигнут лимит уточнений</b> — показываем наиболее вероятную причину: {bestCause?.label || "Диагностировано"}
+            </div>
+          )}
+
+          {showFork ? (
             <div className="fork">
               <div className="opt">
                 <h3>Сделать самому</h3>
-                {verdict.diy?.label && <p>{verdict.diy.label}</p>}
-                {verdict.diy?.tier && (
-                  <p className="guarantee">Сложность: {tierName(verdict.diy.tier)}</p>
+                {diyOption?.label && <p>{diyOption.label}</p>}
+                {diyOption?.tier && (
+                  <p className="guarantee">Сложность: {tierName(diyOption.tier)}</p>
                 )}
-                {verdict.diy?.price_text ? (
-                  <p className="price">{verdict.diy.price_text}</p>
-                ) : verdict.diy?.price_rub ? (
-                  <p className="price">{verdict.diy.price_rub} ₽</p>
+                {diyOption?.price_text ? (
+                  <p className="price">{diyOption.price_text}</p>
+                ) : diyOption?.price_rub ? (
+                  <p className="price">{diyOption.price_rub} ₽</p>
                 ) : null}
               </div>
               <div className="opt">
                 <h3>В мастерской</h3>
-                {verdict.workshop?.detail && <p>{verdict.workshop.detail}</p>}
-                {verdict.workshop?.price_text && (
-                  <p className="price">{verdict.workshop.price_text}</p>
+                {workshopOption?.detail && <p>{workshopOption.detail}</p>}
+                {workshopOption?.price_text && (
+                  <p className="price">{workshopOption.price_text}</p>
                 )}
               </div>
-              {verdict.guarantee && (
-                <p className="guarantee" style={{ gridColumn: "1 / -1" }}>{verdict.guarantee}</p>
+              {guaranteeText && (
+                <p className="guarantee" style={{ gridColumn: "1 / -1" }}>{guaranteeText}</p>
               )}
               <button
                 style={{ gridColumn: "1 / -1" }}
@@ -339,8 +631,8 @@ export default function App() {
                     session_id: result?.session_id,
                     model,
                     symptom,
-                    paid_ar_credit_rub: verdict.diy?.price_rub || 0,
-                    ar_tier: verdict.diy?.tier || 0,
+                    paid_ar_credit_rub: diyOption?.price_rub || 0,
+                    ar_tier: diyOption?.tier || 0,
                   });
                   setResult({ ...result, ticket: t.ticket || t });
                 }}
@@ -350,7 +642,7 @@ export default function App() {
             </div>
           ) : (
             <div className="deeper">
-              <h3>Нужны уточняющие фото (раунд {verdict.round_no ?? 1})</h3>
+              <h3>Нужны уточняющие фото (раунд {roundNo + 1} из 2)</h3>
               <p className="guarantee">Уверенность ниже 80% — сначала нужны уточняющие фото. Цены не показываются.</p>
               <ul>
                 {verdict.deeper?.map((d: string, i: number) => (
@@ -363,6 +655,7 @@ export default function App() {
                   type="file"
                   multiple
                   accept="image/*"
+                  capture="environment"
                   onChange={(e) => setDeeperFiles(Array.from(e.target.files || []))}
                 />
               </label>
@@ -374,36 +667,74 @@ export default function App() {
         </section>
       )}
 
-      {/* 5. Ticket */}
+      {/* 5. Ticket (Polished, with labelled rows and copy/print actions) */}
       {ticket && (
-        <section className="card">
-          <h2>5. Заявка</h2>
-          {ticket.bike_summary && (
-            <p>
-              <b>Велосипед:</b> {ticket.bike_summary}
-            </p>
-          )}
-          {ticket.paid_ar_credit_rub !== undefined && (
-            <p>
-              <b>Зачтено за AI-гид:</b> {ticket.paid_ar_credit_rub} ₽
-            </p>
-          )}
-          {ticket.customer_note && (
-            <p>
-              <b>Примечание:</b> {ticket.customer_note}
-            </p>
-          )}
+        <section className="card ticket-section">
+          <h2>5. Заявка в мастерскую</h2>
+          <div className="ticket-rows">
+            {ticket.bike_summary && (
+              <div className="ticket-row">
+                <span className="ticket-label">Велосипед:</span>
+                <span className="ticket-value">{ticket.bike_summary}</span>
+              </div>
+            )}
+            {ticket.fault_codes && (
+              <div className="ticket-row">
+                <span className="ticket-label">Коды неисправностей:</span>
+                <span className="ticket-value">
+                  {Array.isArray(ticket.fault_codes) ? ticket.fault_codes.join(", ") : String(ticket.fault_codes)}
+                </span>
+              </div>
+            )}
+            {ticket.detected_specs && (
+              <div className="ticket-row">
+                <span className="ticket-label">Определенные параметры:</span>
+                <span className="ticket-value">
+                  {typeof ticket.detected_specs === "object"
+                    ? Object.entries(ticket.detected_specs)
+                        .filter(([_, v]) => v)
+                        .map(([k, v]) => `${humanKey(k)}: ${v}`)
+                        .join(" • ")
+                    : String(ticket.detected_specs)}
+                </span>
+              </div>
+            )}
+            {ticket.paid_ar_credit_rub !== undefined && (
+              <div className="ticket-row">
+                <span className="ticket-label">Зачтено за AI-гид (скидка):</span>
+                <span className="ticket-value" style={{ color: "var(--ok)" }}>
+                  {ticket.paid_ar_credit_rub} ₽
+                </span>
+              </div>
+            )}
+            {ticket.customer_note && (
+              <div className="ticket-row">
+                <span className="ticket-label">Примечание клиента:</span>
+                <span className="ticket-value">{ticket.customer_note}</span>
+              </div>
+            )}
+          </div>
+
           <pre>{JSON.stringify(ticket, null, 2)}</pre>
-          <button type="button" className="btn-secondary" onClick={resetAll} style={{ marginTop: 14 }}>
-            ↻ Начать заново
-          </button>
+
+          <div className="btn-group">
+            <button type="button" className="btn-secondary" onClick={copyTicket}>
+              {copied ? "✓ Скопировано" : "📋 Скопировать"}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => window.print()}>
+              🖨️ Распечатать
+            </button>
+            <button type="button" className="btn-secondary" onClick={resetAll}>
+              ↻ Начать заново
+            </button>
+          </div>
         </section>
       )}
 
       {/* Sticky action bar for mobile when inputs are active */}
       {!result && (
         <div className="sticky-action-bar">
-          <button onClick={run} disabled={busy}>
+          <button onClick={run} disabled={busy || (!symptom && files.length === 0)}>
             {busy ? `Андрей смотрит… (${elapsedSeconds} с)` : "Диагностировать"}
           </button>
         </div>
