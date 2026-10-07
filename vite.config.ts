@@ -24,5 +24,16 @@ export default defineConfig({
   preview: {
     host: "0.0.0.0",
     port: 3000,
+    proxy: {
+      "/andrey": {
+        target: process.env.ANDREY_BASE || "https://hi5.bike/Andrey",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/andrey/, ""),
+        headers: process.env.ANDREY_TOKEN
+          ? { "X-Andrey-Token": process.env.ANDREY_TOKEN }
+          : undefined,
+      },
+    },
   },
 });

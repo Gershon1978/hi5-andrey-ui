@@ -104,58 +104,91 @@ export default function App() {
       {passport && (
         <section className="card">
           <h2>3. Паспорт велосипеда</h2>
-          <p>
-            {passport.identity?.make} {passport.identity?.model} {passport.identity?.year_window}
-          </p>
-          <span className={"gate gate-" + (passport.gate || "unknown")}>gate: {passport.gate}</span>
+          {(() => {
+            const idText = [
+              passport.identity?.make,
+              passport.identity?.model,
+              passport.identity?.year_window,
+            ]
+              .filter((v) => v && String(v).trim() !== "")
+              .join(" ");
+            return idText ? <p><b>{idText}</b></p> : null;
+          })()}
+          {passport.gate && (
+            <span className={"gate gate-" + passport.gate}>gate: {passport.gate}</span>
+          )}
           
-          {passport.blueprint && (
-            <>
-              <h3>Параметры (Blueprint)</h3>
-              <ul>
-                {Object.entries(passport.blueprint).slice(0, 12).map(([k, v]) => (
-                  <li key={k}>
-                    <b>{k}</b>: {String(v)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          {(() => {
+            const blueprintEntries = Object.entries(passport.blueprint || {}).filter(
+              ([_, v]) => v !== null && v !== undefined && String(v).trim() !== "" && !(Array.isArray(v) && v.length === 0)
+            );
+            if (blueprintEntries.length === 0) return null;
+            return (
+              <>
+                <h3>Параметры (Blueprint)</h3>
+                <ul>
+                  {blueprintEntries.map(([k, v]) => (
+                    <li key={k}>
+                      <b>{k}</b>: {String(v)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            );
+          })()}
 
-          {passport.standards && Object.keys(passport.standards).length > 0 && (
-            <>
-              <h3>Стандарты</h3>
-              <ul>
-                {Object.entries(passport.standards).map(([k, v]) => (
-                  <li key={k}>
-                    <b>{k}</b>: {String(v)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          {(() => {
+            const standardsEntries = Object.entries(passport.standards || {}).filter(
+              ([_, v]) => v !== null && v !== undefined && String(v).trim() !== ""
+            );
+            if (standardsEntries.length === 0) return null;
+            return (
+              <>
+                <h3>Стандарты</h3>
+                <ul>
+                  {standardsEntries.map(([k, v]) => (
+                    <li key={k}>
+                      <b>{k}</b>: {String(v)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            );
+          })()}
 
-          {passport.required_parts && passport.required_parts.length > 0 && (
-            <>
-              <h3>Необходимые запчасти</h3>
-              <ul>
-                {passport.required_parts.map((p: any, i: number) => (
-                  <li key={i}>{typeof p === "string" ? p : JSON.stringify(p)}</li>
-                ))}
-              </ul>
-            </>
-          )}
+          {(() => {
+            const parts = (passport.required_parts || []).filter(
+              (p: any) => p && (typeof p !== "string" || p.trim() !== "")
+            );
+            if (parts.length === 0) return null;
+            return (
+              <>
+                <h3>Необходимые запчасти</h3>
+                <ul>
+                  {parts.map((p: any, i: number) => (
+                    <li key={i}>{typeof p === "string" ? p : JSON.stringify(p)}</li>
+                  ))}
+                </ul>
+              </>
+            );
+          })()}
 
-          {passport.fit_constraints && passport.fit_constraints.length > 0 && (
-            <>
-              <h3>Ограничения совместимости</h3>
-              <ul>
-                {passport.fit_constraints.map((c: any, i: number) => (
-                  <li key={i}>{typeof c === "string" ? c : JSON.stringify(c)}</li>
-                ))}
-              </ul>
-            </>
-          )}
+          {(() => {
+            const constraints = (passport.fit_constraints || []).filter(
+              (c: any) => c && (typeof c !== "string" || c.trim() !== "")
+            );
+            if (constraints.length === 0) return null;
+            return (
+              <>
+                <h3>Ограничения совместимости</h3>
+                <ul>
+                  {constraints.map((c: any, i: number) => (
+                    <li key={i}>{typeof c === "string" ? c : JSON.stringify(c)}</li>
+                  ))}
+                </ul>
+              </>
+            );
+          })()}
         </section>
       )}
 
@@ -181,18 +214,26 @@ export default function App() {
             <div className="fork">
               <div className="opt">
                 <h3>Сделать самому</h3>
-                <p>{verdict.diy?.label}</p>
+                {verdict.diy?.label && <p>{verdict.diy.label}</p>}
                 {verdict.diy?.tier && (
                   <p className="guarantee">Сложность: {tierName(verdict.diy.tier)}</p>
                 )}
-                <p className="price">{verdict.diy?.price_text}</p>
+                {verdict.diy?.price_text ? (
+                  <p className="price">{verdict.diy.price_text}</p>
+                ) : verdict.diy?.price_rub ? (
+                  <p className="price">{verdict.diy.price_rub} ₽</p>
+                ) : null}
               </div>
               <div className="opt">
                 <h3>В мастерской</h3>
-                <p>{verdict.workshop?.detail}</p>
-                <p className="price">{verdict.workshop?.price_text}</p>
+                {verdict.workshop?.detail && <p>{verdict.workshop.detail}</p>}
+                {verdict.workshop?.price_text && (
+                  <p className="price">{verdict.workshop.price_text}</p>
+                )}
               </div>
-              <p className="guarantee" style={{ gridColumn: "1 / -1" }}>{verdict.guarantee}</p>
+              {verdict.guarantee && (
+                <p className="guarantee" style={{ gridColumn: "1 / -1" }}>{verdict.guarantee}</p>
+              )}
               <button
                 style={{ gridColumn: "1 / -1" }}
                 onClick={async () => {
