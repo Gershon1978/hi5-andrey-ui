@@ -10,7 +10,9 @@ export default function App() {
   const [model, setModel] = useState("");
   const [symptom, setSymptom] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [deeperFiles, setDeeperFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [deeperBusy, setDeeperBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
 
@@ -32,9 +34,36 @@ export default function App() {
     }
   }
 
+  async function runDeeper() {
+    if (!result?.verdict) return;
+    setDeeperBusy(true);
+    setErr(null);
+    try {
+      const nextRound = (result.verdict.round_no || 0) + 1;
+      const res = await api.deeper(deeperFiles, symptom, model, nextRound);
+      const updatedVerdict = res.verdict || res;
+      setResult((prev: any) => ({
+        ...prev,
+        verdict: updatedVerdict,
+      }));
+      setDeeperFiles([]);
+    } catch (e: any) {
+      setErr(e.message || String(e));
+    } finally {
+      setDeeperBusy(false);
+    }
+  }
+
   const passport = result?.passport;
   const verdict = result?.verdict;
   const ticket = result?.ticket;
+
+  function tierName(tier?: number) {
+    if (tier === 1) return "1 (Простая)";
+    if (tier === 2) return "2 (Обычная)";
+    if (tier === 3) return "3 (Экспертная)";
+    return tier ? String(tier) : "";
+  }
 
   return (
     <main className="wrap">
@@ -78,15 +107,55 @@ export default function App() {
           <p>
             {passport.identity?.make} {passport.identity?.model} {passport.identity?.year_window}
           </p>
-          <span className={"gate gate-" + passport.gate}>gate: {passport.gate}</span>
-          <h3>Параметры</h3>
-          <ul>
-            {Object.entries(passport.blueprint || {}).slice(0, 12).map(([k, v]) => (
-              <li key={k}>
-                <b>{k}</b>: {String(v)}
-              </li>
-            ))}
-          </ul>
+          <span className={"gate gate-" + (passport.gate || "unknown")}>gate: {passport.gate}</span>
+          
+          {passport.blueprint && (
+            <>
+              <h3>Параметры (Blueprint)</h3>
+              <ul>
+                {Object.entries(passport.blueprint).slice(0, 12).map(([k, v]) => (
+                  <li key={k}>
+                    <b>{k}</b>: {String(v)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {passport.standards && Object.keys(passport.standards).length > 0 && (
+            <>
+              <h3>Стандарты</h3>
+              <ul>
+                {Object.entries(passport.standards).map(([k, v]) => (
+                  <li key={k}>
+                    <b>{k}</b>: {String(v)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {passport.required_parts && passport.required_parts.length > 0 && (
+            <>
+              <h3>Необходимые запчасти</h3>
+              <ul>
+                {passport.required_parts.map((p: any, i: number) => (
+                  <li key={i}>{typeof p === "string" ? p : JSON.stringify(p)}</li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {passport.fit_constraints && passport.fit_constraints.length > 0 && (
+            <>
+              <h3>Ограничения совместимости</h3>
+              <ul>
+                {passport.fit_constraints.map((c: any, i: number) => (
+                  <li key={i}>{typeof c === "string" ? c : JSON.stringify(c)}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 
@@ -94,12 +163,16 @@ export default function App() {
       {verdict && (
         <section className="card">
           <h2>4. Диагноз</h2>
+          <span className={"gate gate-" + (verdict.gate || "unknown")}>gate: {verdict.gate}</span>
+          
+          <h3>Причины</h3>
           {verdict.causes?.map((c: any, i: number) => {
-            const conf = c.confidence ?? 0;
-            const pct = Math.round(conf > 1 ? conf : conf * 100);
+            const conf = typeof c.confidence === "number"
+              ? (c.confidence <= 1 ? Math.round(c.confidence * 100) : Math.round(c.confidence))
+              : 0;
             return (
               <p key={i}>
-                {c.label} — {pct}%
+                <b>{c.label}</b> — {conf}% {c.job_code && <span className="guarantee">({c.job_code})</span>}
               </p>
             );
           })}
@@ -109,6 +182,9 @@ export default function App() {
               <div className="opt">
                 <h3>Сделать самому</h3>
                 <p>{verdict.diy?.label}</p>
+                {verdict.diy?.tier && (
+                  <p className="guarantee">Сложность: {tierName(verdict.diy.tier)}</p>
+                )}
                 <p className="price">{verdict.diy?.price_text}</p>
               </div>
               <div className="opt">
@@ -116,8 +192,9 @@ export default function App() {
                 <p>{verdict.workshop?.detail}</p>
                 <p className="price">{verdict.workshop?.price_text}</p>
               </div>
-              <p className="guarantee">{verdict.guarantee}</p>
+              <p className="guarantee" style={{ gridColumn: "1 / -1" }}>{verdict.guarantee}</p>
               <button
+                style={{ gridColumn: "1 / -1" }}
                 onClick={async () => {
                   const t = await api.handoff({
                     session_id: result?.session_id,
@@ -134,12 +211,25 @@ export default function App() {
             </div>
           ) : (
             <div className="deeper">
-              <h3>Нужны уточняющие фото</h3>
+              <h3>Нужны уточняющие фото (раунд {verdict.round_no ?? 1})</h3>
+              <p className="guarantee">Уверенность ниже 80% — сначала нужны уточняющие фото. Цены не показываются.</p>
               <ul>
                 {verdict.deeper?.map((d: string, i: number) => (
-                  <li key={i}>{d}</li>
+                  <li key={i}><b>{d}</b></li>
                 ))}
               </ul>
+              <label>
+                Загрузить уточняющие фото:
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => setDeeperFiles(Array.from(e.target.files || []))}
+                />
+              </label>
+              <button onClick={runDeeper} disabled={deeperBusy || deeperFiles.length === 0}>
+                {deeperBusy ? "Андрей уточняет…" : "Отправить уточняющие фото"}
+              </button>
             </div>
           )}
         </section>
@@ -149,9 +239,21 @@ export default function App() {
       {ticket && (
         <section className="card">
           <h2>5. Заявка</h2>
-          <p>
-            <b>Велосипед:</b> {ticket.bike_summary}
-          </p>
+          {ticket.bike_summary && (
+            <p>
+              <b>Велосипед:</b> {ticket.bike_summary}
+            </p>
+          )}
+          {ticket.paid_ar_credit_rub !== undefined && (
+            <p>
+              <b>Зачтено за AI-гид:</b> {ticket.paid_ar_credit_rub} ₽
+            </p>
+          )}
+          {ticket.customer_note && (
+            <p>
+              <b>Примечание:</b> {ticket.customer_note}
+            </p>
+          )}
           <pre>{JSON.stringify(ticket, null, 2)}</pre>
         </section>
       )}
