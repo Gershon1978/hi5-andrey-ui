@@ -3,7 +3,34 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
-## ROUND 4 — current tasks
+## ROUND 5 — current tasks
+**Read `DESIGN_v2.md` fully — it is the approved design (owner + external review). Rebuild the
+UI as a clean, conversational, single-focus flow.** It supersedes the current layout.
+
+Build:
+1. A **state machine**: INTRO → RECORD_BIKE → CHOICE → PASSPORT → RECORD_PROBLEM → VERDICT
+   (→ DEEPER ≤2 → FORK → TICKET). See `DESIGN_v2.md` §1 for transitions + which API fires.
+2. A **single morphing action unit** at the bottom: one primary control that changes role per
+   state (camera button → dual-choice → progress gauge). See §4.
+3. Two sequential videos: (1) 10 s silent passport video → `POST /api/passport`;
+   (2) problem video with sound → `POST /api/flow`. Show the preliminary bike card from the
+   passport while the user records video 2.
+4. CHOICE = «Помощь в ремонте» (primary) and «Поиск запчастей» → render the passport's
+   blueprint / required_parts / consumable_specs / fit_constraints + placeholder CTA
+   «Заказать через hi5.bike». **No parts backend exists yet — no dead ends, no fake data.**
+5. Use the **exact Russian copy** in `DESIGN_v2.md` §3.
+6. **Remove** everything in §6: status chip, raw `gate:` badges, raw ticket JSON, numbered
+   stage headers, the big static instruction list, all-at-once form fields.
+7. Keep: prices only from the server; `deeper` ⇒ **no prices**, ≤ 2 rounds; all calls via the
+   relative `/andrey/*` path; FormData field name `files`.
+8. Handle the edge cases in §5 (camera fallback, 0–15/15–30/30–60 s analysis messages,
+   «Переснять», network-failure banner that keeps the files).
+9. Update `AGENT_REPLY.md`.
+
+Keep `SPEC.md` / `openapi.json` / `examples/*` untouched; keep `DESIGN_v2.md`.
+
+## Round 4 — done (reference)
+
 An external review (Gemini) found real bugs. Fix all of these.
 
 1. **Guard `Object.entries`** for `passport.blueprint` / `passport.standards` /
