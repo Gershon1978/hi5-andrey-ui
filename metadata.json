@@ -1,0 +1,7 @@
+{
+  "name": "Андрей — веломеханик hi5.bike",
+  "description": "Ассистент по диагностике и ремонту велосипедов сервиса hi5.bike",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

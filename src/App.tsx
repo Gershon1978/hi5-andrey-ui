@@ -94,11 +94,15 @@ export default function App() {
       {verdict && (
         <section className="card">
           <h2>4. Диагноз</h2>
-          {verdict.causes?.map((c: any, i: number) => (
-            <p key={i}>
-              {c.label} — {Math.round((c.confidence || 0) * 100)}%
-            </p>
-          ))}
+          {verdict.causes?.map((c: any, i: number) => {
+            const conf = c.confidence ?? 0;
+            const pct = Math.round(conf > 1 ? conf : conf * 100);
+            return (
+              <p key={i}>
+                {c.label} — {pct}%
+              </p>
+            );
+          })}
 
           {verdict.gate === "verdict" ? (
             <div className="fork">
