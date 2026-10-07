@@ -28,5 +28,11 @@ authoritative contract.** This file is the task list; keep it in sync when you a
   and `workshop` (`detail`, `price_text`), plus `verdict.guarantee`.
 - Render **only non-empty** fields (e.g. the fat-bike blueprint is mostly empty).
 
+## Output convention (the file channel — replaces the chat)
+- **Write your status to `AGENT_REPLY.md`.** That file is **yours**: overwrite its whole
+  contents each round. I will **not** edit it, so there are no merge conflicts.
+- Keep it short: a timestamp, the git SHA you acted on, what you did, changed files, questions.
+- The task list still lives here, in `BUILD_DIRECTIVES.md` (mine) — read it each round.
+
 ## When done
-Reply in the chat with a short list of the files you changed.
+Reply in the chat with a short list of the files you changed, **and** update `AGENT_REPLY.md`.
