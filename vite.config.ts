@@ -14,6 +14,8 @@ export default defineConfig({
         target: process.env.ANDREY_BASE || "https://hi5.bike/Andrey",
         changeOrigin: true,
         secure: true,
+        timeout: 120000,
+        proxyTimeout: 120000,
         rewrite: (p) => p.replace(/^\/andrey/, ""),
         headers: process.env.ANDREY_TOKEN
           ? { "X-Andrey-Token": process.env.ANDREY_TOKEN }
@@ -29,6 +31,8 @@ export default defineConfig({
         target: process.env.ANDREY_BASE || "https://hi5.bike/Andrey",
         changeOrigin: true,
         secure: true,
+        timeout: 120000,
+        proxyTimeout: 120000,
         rewrite: (p) => p.replace(/^\/andrey/, ""),
         headers: process.env.ANDREY_TOKEN
           ? { "X-Andrey-Token": process.env.ANDREY_TOKEN }

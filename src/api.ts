@@ -58,6 +58,15 @@ export const api = {
     return jsonFetch(`${PROXY_BASE}/api/deeper`, { method: "POST", body: fd });
   },
 
+  // POST /api/passport — passport extraction from media.
+  passport: (files: File[], model = "", useWeb = true) => {
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    fd.append("model", model);
+    fd.append("use_web", String(useWeb));
+    return jsonFetch(`${PROXY_BASE}/api/passport`, { method: "POST", body: fd });
+  },
+
   // POST /api/handoff — hand the case to the workshop; returns the ticket.
   handoff: (body: {
     session_id?: string;
