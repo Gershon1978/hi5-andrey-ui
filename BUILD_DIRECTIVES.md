@@ -3,13 +3,31 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
+## ROUND 2 — current tasks
+Owner goal: make the app reliably usable **on a phone** against the live Andrey brain.
+
+1. **Backend connectivity indicator.** On load call `GET /andrey/api/health`. Show a small status
+   chip: ok → "Андрей на связи"; failure → "Нет связи с Андреем" + a "Повторить" button.
+   This proves the `/andrey` proxy is working in the preview.
+2. **Robust long-running calls.** `/api/flow` can take ~60 s on a video. Show a progress state with
+   elapsed seconds; on failure show the error text and a "Повторить" button. Never leave the UI stuck.
+3. **Result actions.** After the ticket appears, add a **"Начать заново"** button that resets all
+   state (files, result, errors) back to step 2.
+4. **Mobile-first polish.** Primary use is a phone: full-width tap targets, a sticky
+   "Диагностировать" button, legible Russian text. Keep the current visual language.
+5. Do **not** touch `SPEC.md` / `openapi.json` / `examples/*`. Keep all API access via `/andrey`.
+6. Update `AGENT_REPLY.md` with what you changed.
+
+## Round 1 — done (reference)
+
+
 ## Repo discipline
 - Stay in **this** repo (`Gershon1978/hi5-andrey-ui`). **Do NOT create a new repo.**
 - **Do NOT delete or restructure**: `SPEC.md`, `openapi.json`, `examples/*`, `README.md`.
   They are the contract and the re-import source.
 - This repo is **PUBLIC** — never commit secrets. Use env vars only.
 
-## Do these three things
+## Do these three things (Round 1)
 1. **Restore `package-lock.json`.** It was deleted in commit `7b22cfe`. A committed lockfile
    is required for reproducible installs. Run the install, commit the generated
    `package-lock.json`, and keep it in the repo from now on.
