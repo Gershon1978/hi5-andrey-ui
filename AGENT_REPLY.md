@@ -1,33 +1,41 @@
 # Agent Status & Build Report
 
-- **Timestamp**: 2026-10-07 15:38 UTC (08:38 PDT)
+- **Timestamp**: 2026-10-07 16:58 UTC (09:58 PDT)
 - **Base Commit / Ref**: `7b22cfe`
-- **Round**: 4 (Bugfixes: safe Object.entries guards, thumbnail memory leak elimination, zero invented prices, round_no indexing, exact "files" field name, 120s proxy timeout)
+- **Round**: 5 (Full UX rebuild to conversational single-focus flow according to DESIGN_v2.md)
 
 ## Completed Tasks
-1. **Guarded `Object.entries`**:
-   - Added `isPlainObject` and `getNonEmptyObjectEntries` guards for `passport.blueprint`, `passport.standards`, `passport.consumable_specs`, and `ticket.detected_specs`.
-   - Iterates strictly on plain objects (prevents crashes if a field is null, string, or array) and filters out empty values.
-   - Guarded `passport.required_parts` and `passport.fit_constraints` with `Array.isArray`.
-2. **Fixed thumbnail memory leak**:
-   - Eliminated `URL.createObjectURL(file)` inside the render loop.
-   - Blob URLs are now created once in `handleAddFiles`, held in state (`UploadItem.thumbUrl`), and properly revoked via `URL.revokeObjectURL` upon file removal, state reset, and component unmount.
-3. **Removed ALL hardcoded price fallbacks**:
-   - Prices come exclusively from server payloads (`verdict.diy.price_text`, `verdict.diy.price_rub`, `verdict.workshop.price_text`).
-   - When `verdict.gate === "deeper"` or `diy` is null, no prices are shown at all.
-4. **Corrected `round_no` indexing**:
-   - In `runDeeper`, sends `nextRound = (result.verdict.round_no ?? 0) + 1` (integer).
-   - Caps the clarifier loop at 2 rounds: when `round_no >= 2`, stops requesting photos, shows *"Достигнут лимит уточнений — показываем наиболее вероятную причину"*, and displays the best cause without invented prices.
-5. **Verified FormData field name**:
-   - Ensured `fd.append("files", f)` (field name `"files"`, not `"files[]"`) in `api.flow`, `api.deeper`, and `api.passport`.
-6. **Configured proxy timeouts**:
-   - Set `timeout: 120000` and `proxyTimeout: 120000` on both `server` and `preview` proxy configurations in `vite.config.ts`.
-   - Kept all client calls on relative `/andrey/*` paths (no absolute URLs, zero client secrets).
-7. **Verified build**:
-   - `compile_applet` passed cleanly.
+1. **Implemented State Machine**:
+   - `INTRO` → `RECORD_BIKE` → `CHOICE` → `PASSPORT` → `RECORD_PROBLEM` → `ANALYZING` → `VERDICT` (→ `DEEPER` ≤2 rounds → `TICKET`) and `PARTS` branch.
+   - Connected sequential video calls: silent bike video triggers `POST /api/passport` in the background, and problem video with sound triggers `POST /api/flow`.
+2. **Morphing Action Unit**:
+   - Single persistent bottom dock adapting to each state:
+     - `INTRO`: «🎥 Показать велосипед» + hint.
+     - `CHOICE`: continuation pill with selected intent + «Переснять» action on preview.
+     - `PASSPORT`: «🎥 Снять видео поломки» + hint.
+     - `ANALYZING`: progress gauge with rotating status messages (0–15 s, 15–30 s, 30–60 s, 60+ s).
+     - `VERDICT`: «Передать заявку в hi5.bike».
+     - `DEEPER`: «📷 Загрузить фото узла» (strictly NO prices).
+     - `TICKET`: «↻ Начать заново».
+     - `PARTS`: «Заказать через hi5.bike».
+   - Ambient expandable prompts: `+ Назвать модель текстом`, `+ Написать симптом словами`.
+3. **Exact Russian Copy**:
+   - Implemented exact text specified in `DESIGN_v2.md` §3 across all headers, speech bubbles, buttons, hints, and error states.
+4. **Clean Conversational Canvas**:
+   - Removed all debug elements: status chip header, raw gate badges, raw ticket JSON dump, numbered stage headers, big static capture instruction lists, and all-at-once forms.
+   - Andrey speaks in the first person from a small avatar with an animated online ring.
+5. **Parts Branch**:
+   - Displays detected bike specs (blueprint, standards, consumable specs, required parts, fit constraints) with placeholder CTA «Заказать через hi5.bike» and a return link to repair diagnosis. No dead ends, no fake data.
+6. **Robust Edge Cases**:
+   - Network failure banner retaining files with a «Повторить» action.
+   - Rotating analysis messages during long video processing.
+   - Camera fallback to native gallery file picker.
+   - 2-round cap on clarifier requests displaying the best cause with zero hardcoded prices.
+7. **Contract Integrity**:
+   - `SPEC.md`, `openapi.json`, `examples/*`, and `DESIGN_v2.md` remain strictly intact.
+   - All requests route relative via `/andrey/*` with `files` FormData key.
 
 ## Changed Files
 - `AGENT_REPLY.md`
 - `src/App.tsx`
-- `src/api.ts`
-- `vite.config.ts`
+- `src/styles.css`
