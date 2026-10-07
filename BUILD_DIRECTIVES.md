@@ -3,7 +3,36 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
-## ROUND 3 — current tasks
+## ROUND 4 — current tasks
+An external review (Gemini) found real bugs. Fix all of these.
+
+1. **Guard `Object.entries`** for `passport.blueprint` / `passport.standards` /
+   `passport.consumable_specs`. Only iterate when the value is a **plain object** (not an
+   array, string or null) and filter out empty values. Right now a non-object value can crash
+   the render.
+2. **Thumbnail memory leak.** Do **not** call `URL.createObjectURL(file)` inside the render
+   loop — it re-runs on every tick of the `elapsedSeconds` timer and allocates thousands of
+   blob URLs (crashes mobile browsers). Create the object URL **once** in `handleAddFiles`,
+   store it in state, and `URL.revokeObjectURL(...)` on remove and on unmount.
+3. **Never invent prices.** Remove every hardcoded price fallback. Prices come **only** from
+   the server (`diy.price_text` / `diy.price_rub`). When `gate === "deeper"` or `diy` is
+   `null`, show **no prices at all**.
+4. **`round_no` indexing.** The brain's `/api/deeper` `round_no` defaults to **1**. Send
+   `nextRound = (verdict.round_no ?? 0) + 1` and cap the clarifier loop at **2** rounds.
+5. **FormData field name** must be exactly `"files"` (not `"files[]"`) in `api.flow`,
+   `api.deeper`, `api.passport`.
+6. **Proxy timeouts.** In `vite.config.ts` set the `/andrey` proxy `timeout` to **≥ 120000 ms**
+   (video flows take 60 s+). Keep every call on the **relative** `"/andrey/*"` path — do not
+   use absolute URLs and never read secrets in the browser.
+7. Update `AGENT_REPLY.md`.
+
+> Note: we may serve this built SPA from our **own** server (same origin as the brain) behind a
+> server-side relay that injects `X-Andrey-Token`, because Google's applet auth-bridge breaks
+> POSTs on the bare Cloud Run URL. Keep the app fully relative so that swap is trivial.
+
+## Round 3 — done (reference)
+
+
 Owner goal: make the app genuinely usable **on a phone** and show the **full** diagnosis.
 
 1. **Phone capture UX.** Replace the single file input with two buttons:
