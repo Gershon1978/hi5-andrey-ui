@@ -1,40 +1,29 @@
 # Agent Status & Build Report
 
-## Status: Done
+- **Timestamp**: 2026-10-07 13:15 UTC (06:15 PDT)
+- **Base Commit / Ref**: `7b22cfe`
+- **Round**: 2 (Mobile-first polish, health indicator, long-running progress & retry, reset action)
 
-### Verification & Decisions:
-1. **Repository discipline maintained**:
-   - Operating directly in `Gershon1978/hi5-andrey-ui` (no new repo created).
-   - Contract and specification files left completely intact without modification:
-     - `SPEC.md`
-     - `openapi.json`
-     - `examples/capture.json`
-     - `examples/blueprint.json`
-     - `examples/verdict.json`
-     - `examples/README.md`
-     - `README.md`
-2. **`package-lock.json` committed**:
-   - Generated and restored via npm for reproducible installs; maintained in repository.
-3. **`metadata.json` updated**:
-   - `capabilities: []` (removed `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` because AI logic runs on `https://hi5.bike/Andrey`, preventing unnecessary runtime Gemini credentials injection).
-4. **All API access routed server-side via `/andrey`**:
-   - Browser exclusively fetches relative `/andrey/*` routes defined in `src/api.ts`.
-   - Server-side Vite proxy (both `server` and `preview`) forwards `/andrey/*` to `ANDREY_BASE` (defaulting to `https://hi5.bike/Andrey`) and passes `X-Andrey-Token` when `ANDREY_TOKEN` is set.
-   - Zero direct browser calls to `hi5.bike`, avoiding CORS and keeping any token server-side.
-5. **Render rules applied (`SPEC.md` + `examples/`)**:
-   - Confidence formatted as 0–100%.
-   - Gate `verdict`: displays DIY (`label`, `tier`, `price_text`/`price_rub`) and Workshop (`detail`, `price_text`) plus the guarantee line and handoff action.
-   - Gate `deeper`: strictly hides all prices, shows `verdict.deeper` photo requests, and provides clarifier photo upload (`POST /api/deeper`).
-   - Filters out all empty and blank fields in passport identity, blueprint specs, standards, required parts, fit constraints, and ticket summary.
+## Completed Tasks
+1. **Backend connectivity indicator**:
+   - Wired `GET /andrey/api/health` on load and via retry button.
+   - Added status chip in header: ok → "Андрей на связи" (green dot); failure → "Нет связи с Андреем" (red dot) + "Повторить" button; checking state handled.
+2. **Robust long-running `/api/flow` calls**:
+   - Added live timer showing elapsed seconds (`Андрей смотрит… (XX с)`).
+   - Displayed progress info banner during analysis.
+   - On error: displays exact error details with an inline "Повторить диагностику" retry button; prevents stuck states.
+3. **Result reset action**:
+   - Added "Начать заново" button in the ticket section that completely clears all files, model, symptom, errors, clarifiers, and result state back to step 2.
+4. **Mobile-first polish**:
+   - Configured full-width tap targets with minimum touch height (≥48px) and 16px input font size (prevents iOS auto-zoom).
+   - Added sticky action bar at bottom for "Диагностировать".
+   - Responsive layout optimized for mobile screens.
+5. **Contract & repo discipline**:
+   - `SPEC.md`, `openapi.json`, and `examples/*` remain completely untouched.
+   - All backend calls route exclusively through `/andrey` via server-side proxy.
 
----
-
-### Changed Files:
-- `AGENT_REPLY.md` (status and report)
-- `package-lock.json` (restored npm lockfile)
-- `metadata.json` (cleared capabilities)
-- `src/App.tsx` (SPEC render rules and empty-field filtering)
-- `vite.config.ts` (dev and preview proxy configuration for `/andrey`, port 3000)
-- `package.json` (dev/preview host 0.0.0.0 and port 3000)
-- `index.html` (meta tags synced with metadata)
-- `.env.example` (documented ANDREY_BASE and ANDREY_TOKEN)
+## Changed Files
+- `AGENT_REPLY.md`
+- `src/api.ts`
+- `src/App.tsx`
+- `src/styles.css`

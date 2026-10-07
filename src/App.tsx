@@ -7,6 +7,7 @@ import { api } from "./api";
  */
 export default function App() {
   const [contract, setContract] = useState<any>(null);
+  const [health, setHealth] = useState<"checking" | "ok" | "fail">("checking");
   const [model, setModel] = useState("");
   const [symptom, setSymptom] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -15,10 +16,41 @@ export default function App() {
   const [deeperBusy, setDeeperBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  async function checkHealth() {
+    setHealth("checking");
+    try {
+      const res = await api.health();
+      if (res?.ok) {
+        setHealth("ok");
+      } else {
+        setHealth("fail");
+      }
+    } catch {
+      setHealth("fail");
+    }
+  }
 
   useEffect(() => {
+    checkHealth();
     api.capture().then(setContract).catch((e) => setErr(String(e)));
   }, []);
+
+  useEffect(() => {
+    let timer: any = null;
+    if (busy) {
+      setElapsedSeconds(0);
+      timer = setInterval(() => {
+        setElapsedSeconds((s) => s + 1);
+      }, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [busy]);
 
   async function run() {
     setBusy(true);
@@ -54,6 +86,19 @@ export default function App() {
     }
   }
 
+  function resetAll() {
+    setModel("");
+    setSymptom("");
+    setFiles([]);
+    setDeeperFiles([]);
+    setBusy(false);
+    setDeeperBusy(false);
+    setErr(null);
+    setResult(null);
+    setElapsedSeconds(0);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const passport = result?.passport;
   const verdict = result?.verdict;
   const ticket = result?.ticket;
@@ -67,7 +112,27 @@ export default function App() {
 
   return (
     <main className="wrap">
-      <h1>Андрей · веломеханик hi5.bike</h1>
+      <header className="app-header">
+        <h1>Андрей · веломеханик hi5.bike</h1>
+        {health === "ok" && (
+          <span className="status-chip ok" title="Связь с сервером активна">
+            <span className="dot" /> Андрей на связи
+          </span>
+        )}
+        {health === "checking" && (
+          <span className="status-chip checking">
+            <span className="dot" /> Проверка связи…
+          </span>
+        )}
+        {health === "fail" && (
+          <span className="status-chip fail">
+            <span className="dot" /> Нет связи с Андреем
+            <button type="button" className="btn-sm" onClick={checkHealth}>
+              Повторить
+            </button>
+          </span>
+        )}
+      </header>
 
       {/* 1. Capture guidance */}
       <section className="card">
@@ -82,22 +147,55 @@ export default function App() {
         <h2>2. Ваш велосипед</h2>
         <label>
           Модель (необязательно)
-          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="напр. Scott Big Jon" />
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="напр. Scott Big Jon"
+            disabled={busy}
+          />
         </label>
         <label>
           Что случилось?
-          <textarea value={symptom} onChange={(e) => setSymptom(e.target.value)} rows={3} />
+          <textarea
+            value={symptom}
+            onChange={(e) => setSymptom(e.target.value)}
+            rows={3}
+            placeholder="Опишите проблему или звук"
+            disabled={busy}
+          />
         </label>
-        <input
-          type="file"
-          multiple
-          accept="image/*,video/*"
-          onChange={(e) => setFiles(Array.from(e.target.files || []))}
-        />
+        <label>
+          Фото или видео узла
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            onChange={(e) => setFiles(Array.from(e.target.files || []))}
+            disabled={busy}
+          />
+        </label>
+
+        {busy && (
+          <div className="progress-box">
+            <div className="progress-timer">Андрей смотрит… ({elapsedSeconds} с)</div>
+            <div className="progress-note">
+              Обработка видео и звука обычно занимает 30–60 секунд. Пожалуйста, не закрывайте страницу.
+            </div>
+          </div>
+        )}
+
         <button onClick={run} disabled={busy}>
-          {busy ? "Андрей смотрит…" : "Диагностировать"}
+          {busy ? `Андрей смотрит… (${elapsedSeconds} с)` : "Диагностировать"}
         </button>
-        {err && <p className="err">{err}</p>}
+
+        {err && (
+          <div className="err-box">
+            <p className="err">Ошибка: {err}</p>
+            <button type="button" className="btn-retry" onClick={run} disabled={busy}>
+              Повторить диагностику
+            </button>
+          </div>
+        )}
       </section>
 
       {/* 3. Passport */}
@@ -296,7 +394,19 @@ export default function App() {
             </p>
           )}
           <pre>{JSON.stringify(ticket, null, 2)}</pre>
+          <button type="button" className="btn-secondary" onClick={resetAll} style={{ marginTop: 14 }}>
+            ↻ Начать заново
+          </button>
         </section>
+      )}
+
+      {/* Sticky action bar for mobile when inputs are active */}
+      {!result && (
+        <div className="sticky-action-bar">
+          <button onClick={run} disabled={busy}>
+            {busy ? `Андрей смотрит… (${elapsedSeconds} с)` : "Диагностировать"}
+          </button>
+        </div>
       )}
     </main>
   );

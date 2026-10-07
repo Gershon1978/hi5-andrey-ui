@@ -19,6 +19,9 @@ async function jsonFetch(url: string, init?: RequestInit) {
 export const api = {
   proxyBase: PROXY_BASE,
 
+  // GET /api/health — backend connectivity check.
+  health: () => jsonFetch(`${PROXY_BASE}/api/health`),
+
   // GET /api/capture — the filming contract (how to shoot the clip).
   capture: () => jsonFetch(`${PROXY_BASE}/api/capture`),
 
