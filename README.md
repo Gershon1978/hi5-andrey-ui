@@ -7,6 +7,7 @@ UI + the API contract. The brain stays on the server (`https://hi5.bike/Andrey`)
 ## What's here
 - `SPEC.md` — **read this first**: the screens, the flow, the pricing rules, the gate.
 - `openapi.json` — the live API contract (every endpoint + schema).
+- `examples/` — **real** live response samples (`capture`, `blueprint`, `verdict`) to build against.
 - `src/` — a minimal React (Vite + TS) scaffold to build on.
 
 ## For AI Studio Build
