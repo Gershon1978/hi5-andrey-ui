@@ -3,7 +3,36 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
-## ROUND 2 — current tasks
+## ROUND 3 — current tasks
+Owner goal: make the app genuinely usable **on a phone** and show the **full** diagnosis.
+
+1. **Phone capture UX.** Replace the single file input with two buttons:
+   - "Снять/выбрать видео" → `<input type="file" accept="video/*" capture="environment">`
+   - "Добавить фото" → `<input type="file" accept="image/*" capture="environment" multiple>`
+   List chosen files with name + size and a "×" remove control; thumbnail for images.
+
+2. **Full Passport.** Render every part of `passport`, hiding empty ones:
+   `identity` (make, model, year_window, confidence), `standards`, `consumable_specs`,
+   `blueprint` (non-empty only, as label/value rows), `required_parts`, `fit_constraints`.
+   Use human labels rather than raw snake_case keys where practical.
+
+3. **Deeper loop caps at 2 rounds.** When `verdict.round_no >= 2` (or after the 2nd clarifier),
+   stop asking for photos: show "Достигнут лимит уточнений — показываем наиболее вероятную
+   причину" and render the fork for the best cause.
+
+4. **Ticket polish.** Labelled rows for `bike_summary`, `fault_codes`, `detected_specs`,
+   `paid_ar_credit_rub` (₽), `customer_note`. Add **"Скопировать"** (copy as text) and
+   **"Распечатать"** (`window.print`) buttons.
+
+5. **Resume.** Persist the last result in `localStorage`; on load, if present, offer
+   **"Восстановить последний диагноз"**.
+
+6. Do **not** touch `SPEC.md` / `openapi.json` / `examples/*`. Keep all calls via `/andrey`.
+
+7. Update `AGENT_REPLY.md` with what you changed.
+
+## Round 2 — done (reference)
+
 Owner goal: make the app reliably usable **on a phone** against the live Andrey brain.
 
 1. **Backend connectivity indicator.** On load call `GET /andrey/api/health`. Show a small status
