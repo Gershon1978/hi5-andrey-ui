@@ -3,7 +3,41 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
-## ROUND 5 — current tasks
+## ROUND 6 — current tasks
+**Goal: put the app on the Andrey design standard.** Read **`DESIGN_STANDARD.md`** (new this round)
+first — it is the visual law. `DESIGN_v2.md` still owns the flow and the exact Russian copy.
+**Do not change a single string, state, transition or API call this round** — this is a visual-layer round.
+
+1. **Tokens.** Replace the `:root` block in `src/styles.css` with exactly the tokens in
+   `DESIGN_STANDARD.md`. The current palette is a red-brand palette that **violates P4** — the standard
+   carries a token-by-token mapping table of everything that must change.
+2. **P4 — colour discipline.** Blue `#007AFF` for **every** interaction; navy `#0B2545` for all text;
+   red `#E02020` **only** for record / stop / danger (the error banner, and the shutter while media is
+   actually being captured). **No green, no amber, no second grey** — success badges and cause
+   percentages become blue on wash.
+3. **Shapes.** Radius exactly: pills / tags / badges `999`, `.speech-bubble` `28`, cards `32`, inputs
+   `16`. Nothing sharp anywhere. Snap padding and gaps to `4 / 8 / 12 / 16 / 24 / 32`.
+4. **Type.** Only `13 / 14 / 16 / 22` px at weights `400 / 600 / 700` (map 12→13, 15→16, 17→16, 18→22).
+5. **Icons.** Replace every emoji with inline monoline SVG (24 px, stroke 2.5, round caps,
+   `currentColor`). If an icon can't be drawn in that style, drop it — do not keep the emoji.
+6. **`orbit_shutter`.** The camera-opening control becomes the single **round** record control (~72 px,
+   wheel motif). It must keep opening the **same** `input type=file capture=environment` — no new
+   capability, no new permission, no in-page recording.
+7. **`ring`.** Turn the flat `ANALYZING` gauge into the round progress ring (subtle, `10s linear`).
+8. Do **NOT** touch `SPEC.md`, `openapi.json`, `examples/*`, `DESIGN_v2.md` or `DESIGN_STANDARD.md`.
+   Do **NOT** create a new repo. Do **NOT** commit secrets — the repo is public.
+9. Do **NOT** start the ROUND 7 items: the voice-guided loop, the `wheel_guide` asset, a parts backend.
+
+**Verify before you reply:** `npm run build` passes (`tsc --noEmit && vite build`), and run the three
+grep checks under "Definition of done" in `DESIGN_STANDARD.md`. Then overwrite `AGENT_REPLY.md` with the
+commit SHA, the final `:root` block pasted in, the files changed, and those grep results.
+
+**Note (dev only):** the brain now gates every `/api/*` route behind `X-Andrey-Token` and answers `401`
+without it, so local dev needs `ANDREY_TOKEN` in `.env` (see `README.md`; fixed in `80f63ff`).
+Keep every call on the relative `/andrey/*` path with the FormData field name `files`, and never read the
+token in the browser.
+
+## ROUND 5 — done (reference)
 **Read `DESIGN_v2.md` fully — it is the approved design (owner + external review). Rebuild the
 UI as a clean, conversational, single-focus flow.** It supersedes the current layout.
 
