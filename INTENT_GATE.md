@@ -13,24 +13,35 @@ state silently leaks into the result (our code defaults the intent to `"REPAIR"`
 
 ```
 THE INTENT GATE — the rule
-1. Render the fork «Помочь:» with dual_pill [ Помощь в ремонте ] / [ Поиск запчастей ]
-   during the first video's processing, once the coarse identity lands.
-2. The Anchor is strictly a RECEIPT: render ONLY make, model and year before a tap.
-3. Prohibit ALL reasoned output, specs, topology, fault lists and prices before a tap.
+1. On capture, IMMEDIATELY render the ask + the two large cards «Помощь в ремонте» /
+   «Поиск запчастей» (a wrench glyph and a cassette glyph) while the video is processed.
+2. Render NOTHING derived from the video before the tap: no identity line, no spec, no
+   topology, no fault, no reasoned output, no prices. NOT EVEN «Вижу Trek Marlin 7».
+3. The identity lands AFTER the tap, as the header of the resolved screen.
 4. Eliminate "not selected yet": never default, never guess, never auto-switch on timeout.
-5. If the user idles, park indefinitely on the receipt and keep the fork alive WITHOUT
-   executing downstream pipelines.
-6. The tapped intent decides the job: run Repair Diagnosis OR Parts Fitment only after
-   the receipt of an intent.
-7. Both branches demand the native camera as their immediate next step
-   (Repair -> 10 s video with sound; Parts -> macro photo of the marking).
-8. Handle an intent mismatch as a full-screen transition STATE with a single redirect
-   pill, never as a persistent link.
-9. Telemetry enums are strict: `s3_mode_chosen` accepts ONLY "repair" | "parts" —
-   zero `timeout_default` values, ever.
+5. If the user never taps, hold the ask screen indefinitely and run NO downstream job.
+6. The tapped intent decides the job: Repair Diagnosis OR Parts Fitment, only after a tap.
+7. Both branches demand the native camera as their immediate next step (Repair -> 10 s
+   video with sound; Parts -> macro photo of the marking).
+8. A Tier-4 re-film keeps the chosen intent VISIBLE and CHANGEABLE, so the tap is not lost.
+9. A mismatch is a full-screen transition STATE with a single pill, never a persistent link.
+10. Telemetry is strict: `s3_mode_chosen` accepts ONLY "repair" | "parts" — zero
+    `timeout_default` values, ever.
 ```
 
-## 1 · THE ONE OPEN DECISION (owner)
+## 1 · THE RULING (owner, 2026-10-09) — this SUPERSEDES the A/B reading below
+
+**The user MUST choose Ремонт or Запчасти before we output ANY result of the first video.** Not
+merely before the reasoning — before all of it: no identity line, no «Вижу Trek Marlin 7», no spec,
+no blueprint, no price. Until the tap the ONLY things on screen are the ask and the two cards. The
+ask is made **while the video is being analysed**, so the decision overlaps our processing — no idle
+wait, and the two cards ARE the thing to do at that moment. The identity lands **after** the tap, as
+the header of the resolved screen.
+
+**The receipt is dead.** We had proposed it (identity only) as the parked state and Gemini endorsed
+it; the owner overruled it. The block below is kept as history — do not rebuild it.
+
+### (history) the retired A/B reading
 
 The owner's literal words: *"we need the user to press on either Ремонт OR Buy before we
 output the initial video analysis."* The first video always yields *something* — at minimum
@@ -46,17 +57,17 @@ it is what un-blinds the choice and proves the machine is alive, and it leaks no
 fault, no price. **I concur.** The gate the owner asked for is a gate on the **answer**, not
 on the heartbeat.
 
-## 2 · THE MOMENT TABLE (honest latency: the receipt lands at ~15 s, not 5 s)
+## 2 · THE MOMENT TABLE
 
 | t | the line (one short line) | the ONE control | backend |
 |---|---|---|---|
 | 0 | «Покажите велосипед: 10 секунд, без звука.» | `orbit_shutter` (native camera) | records one 10 s silent drive-side clip |
-| 1–14 | «Изучаю геометрию и трансмиссию…» | **none** | upload (8–12 s) → frame sample (2–3 s) → coarse pass (3–4 s): identity + the Tier-4 quality/safety check. Keyframes kept against `session_id`, 15 min TTL |
-| **branch** | «{причина}: {действие} и снимите ещё раз.» | **[ Снять ещё раз (10 с) ]** | Tier-4 REJECT: `low_lux` · `no_drive_side` · `triangle_missing` · `lens_greased`. The fork is **never** shown over a dead video |
+| **0–1** | **«Пока изучаю видео, чем помочь?»** | **`dual_pill`** — two 96 px cards (a wrench / a cassette) **immediately on capture** | upload (8–12 s) → frame sample (2–3 s) → coarse pass (3–4 s) → the Tier-4 quality/safety check, all in parallel with the tap. Keyframes kept against `session_id`, 15 min TTL |
+| 1 → tap | the same ask, unchanged | the same two cards | **nothing about the video is rendered.** No identity, no spec, no fault, no price |
+| **branch** | «{причина}: {действие} и снимите ещё раз.» | **[ Снять ещё раз (10 с) ]** + the two cards below it, the chosen one still **active and switchable** | Tier-4 REJECT: `low_lux` · `no_drive_side` · `triangle_missing` · `lens_greased`. The ask is never shown over a dead video, and the tap is **not** lost |
 | **branch** | «Внимание: обнаружено повреждение рамы ({узел}). Эксплуатация опасна.» | **[ Показать повреждение ]** | safety intercept — terminal, regardless of any intent |
-| **15** | «Вижу {марка} {модель} ({год}).» + «Помочь:» | `dual_pill` (vertical, two full-width pills) | **parked.** Receipt only. No breakdown job runs, no tokens burned |
-| tap REPAIR | «{марка} {модель} • Ремонт» + «Снимите 10 секунд со звуком: покрутите педали и покажите узел с проблемой.» | [ Снять видео со звуком (10 с) ] | `mode=repair` → the diagnostic pipeline starts |
-| tap PARTS | «{марка} {модель} • Запчасти» + «Сфотографируйте маркировку на детали крупным планом.» | [ Снять фото маркировки ] | `mode=parts` → the fitment pipeline starts |
+| **tap REPAIR** | «{марка} {модель} • 1×10» + «Снимите 10 секунд со звуком: покрутите педали и покажите узел с проблемой.» | [ Снять видео со звуком (10 с) ] | `mode=repair` → the diagnostic pipeline runs on the cached frames; the identity is rendered **here**, after the tap |
+| **tap PARTS** | «{марка} {модель} • 1×10» + «Базовый стандарт определён. Сфотографируйте маркировку на детали крупным планом.» | [ Снять фото маркировки ] | `mode=parts` → the fitment pipeline runs; **no prices** below 80 % confidence |
 | mismatch | «Похоже, вы показываете {поломку/маркировку}. {Перейти}?» | ONE redirect pill | a state, not a link |
 | verdict REPAIR | the diagnosis (FREE) + «Пошаговая настройка и голосовое сопровождение ремонта с Андреем — {price}» | [ Начать ремонт с Андреем — {price} ] | `{price}` comes from the server (150 ₽ today) |
 | verdict PARTS ≥ 80 % | part name + price **from the server** + «Инструкция по замене узла с Андреем — {price}» | [ Заказать деталь и инструкцию ] | below 80 %: **zero prices**, ask for the marking photo |
@@ -140,7 +151,7 @@ pass is too slow — tighten the pipeline, do **not** invent a default.
 |---|---|---|
 | 1 | `useState<"REPAIR" \| "PARTS">("REPAIR")` — a silent default | `useState<"REPAIR" \| "PARTS" \| null>(null)` — **no default exists** |
 | 2 | the dock shows `Продолжить: {…}` and calls `handleSelectIntent(userIntent)` → the leak | the button is **deleted**; the two pills are the only control; the dock shows the progress gauge only while the receipt is being computed |
-| 3 | the CHOICE bubble: «Принял видео, изучаю байк. Что делаем дальше?» | while processing: «Принял видео, изучаю байк…»; then the **receipt**: «Вижу {марка} {модель} ({год}).» + «Помочь:» |
+| 3 | the CHOICE bubble: «Принял видео, изучаю байк. Что делаем дальше?» | the **ask**: «Пока изучаю видео, чем помочь?» — and it never becomes a result |
 | 4 | `handleSelectIntent` is reachable without a tap | it is called **only** from a pill tap |
 
 Because `PASSPORT` (the state that renders the standards/tags) and `PARTS` are entered **only**
@@ -159,5 +170,57 @@ gave the honest latency budget: upload 8–12 s + sample 2–3 s + coarse 3–4 
 plus the moment table, the state machine, the counters, the 6 cases), R4 (the ruling: keep the
 receipt; the paywall amount comes from the server; the Tier-4 copy normalised; the law above).
 Thread: `https://gemini.google.com/app/7577c09a47c57d5a`.
+
+Rounds 5–6 (after the owner's ruling and his visual spec): the ask is asked **immediately** on
+capture; the two large cards carry a **wrench** and a **cassette**; the colours and the card anatomy
+were corrected onto our tokens; the "cassette in a box" was resolved by dropping the box; and the
+Tier-4 re-film was made to preserve the tap.
+
+## 8 · THE CARD SPEC (converged in R5–R6)
+
+**The ask line:** «Пока изучаю видео, чем помочь?» — one line, a genuine question (warm workshop
+register; «что вам нужно?» reads transactional). Short variant for a 360 px screen:
+«Пока смотрю видео: чем помочь?». A question mark IS allowed here — our old "no question mark" law
+was about the colon lead-in «Помочь:», not about a real question.
+
+**Two cards, stacked, full width** (side-by-side fails: a 160 px target is too narrow for a gloved
+thumb holding the phone one-handed).
+
+| | spec |
+|---|---|
+| size | `calc(100vw - 32px)` wide (16 px margins) · **96 px** tall · 12 px gap · radius **24 px** |
+| badge | 56 × 56 round, 16 px inset, holding a **32 px monoline glyph** |
+| text | at x = 84 px: label 17 px / 700 · sub-label 13 px / 400, line-height 18 px |
+| unselected | white fill · 1.5 px `hair` `#DCE8FA` border · badge `wash` `#EBF3FF` · glyph blue `#007AFF` · label navy `#0B2545` · sub-label `muted` `#7C8CA6` |
+| **tapped** | fill `#007AFF` · border `#007AFF` · badge white 20 % · glyph white · label white 700 · sub-label white 85 % |
+
+**The two glyphs** (inline SVG in the bundle — zero requests, zero layout shift, visible at t = 0 on
+3G; the glyph is `aria-hidden`, the card carries the meaning):
+
+- **Ремонт — гаечный ключ:** a classic **combination spanner** — an open-end jaw at one end, a box
+  ring at the other — **along a 45° diagonal**, one continuous monoline path, stroke 2.5, round caps.
+- **Запчасти — кассета:** a front-facing **3-sprocket stepped cluster** (outer / middle / spline
+  rings) with **teeth as radial ticks** on the outer ring; stroke 2.0 — three concentric rings fuse
+  at 2.5 at this size.
+
+**The box is dropped.** The owner asked for "a shinny new casette **in a box** (realistic)"; at a
+32 px glyph a box plus a cassette collapses to ≈0.5 px cardboard folds that read as a broken printer
+cartridge, and growing the asset to 96 px pushes the cards past 140 px, so the tap zone falls below
+the thumb fold on an iPhone SE. The "shiny new" quality comes from clean teeth and our blue, not
+from cardboard.
+
+**No product photo on the card.** Our catalogue really does hold studio shots (Deore 10 s 11–42T is
+SKU `ACSM410010142`) — but a photo of one real cassette *names an object before the user has stated
+a need*, so someone with a snapped cable or worn pads reads the button as "gears only". An abstract
+monoline cluster says "spare parts" without narrowing the catalogue. (If photography is ever
+mandated: **both** cards photoreal, isolated cut-outs on transparent backgrounds, never mixing
+raster with monoline.)
+
+**The park.** At 60 s and at 3 minutes the screen is **identical**: the ask + the two cards — no
+decay, no dimming, no auto-route. The client holds the video `File` for the whole session and the
+brain holds the sampled keyframes under `session_id` (15 min TTL), so a tap three minutes later
+still costs no second upload and no second vision pass. Log `s2_park_dwell{dwell_ms, dwell_bucket}`
+on the tap, and `s2_park_abandoned{dwell_ms}` if the tab closes.
+
 
 
