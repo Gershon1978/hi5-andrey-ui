@@ -26,7 +26,7 @@ A single page, top to bottom:
    `passport.blueprint` (canonical specs), `passport.required_parts`, `passport.fit_constraints`.
 5. **Render the Verdict + Fork** — gate-aware:
    - `verdict.gate === "verdict"` (≥80 %): show the two options —
-     - **DIY** `verdict.diy` → label + `price_text` + `tier` (1/2/3 = Простая/Обычная/Экспертная),
+     - **DIY** `verdict.diy` → label + `price_text` (**one flat 150 ₽ — no tiers for now**),
      - **Workshop** `verdict.workshop` → `price_text` (a range), `detail`,
      - the guarantee line `verdict.guarantee`,
      - a "Передать в мастерскую" button → `POST /api/handoff {session_id, model, symptom, paid_ar_credit_rub, ar_tier}`.
@@ -37,8 +37,8 @@ A single page, top to bottom:
    `fault_codes`, `paid_ar_credit_rub`, `customer_note`).
 
 ## Pricing rules (do NOT invent prices)
-- DIY guide price comes from the CRM job **group**: Простая **50 ₽**, Обычная **100 ₽**,
-  Экспертная **150 ₽** (server sends `diy.price_text` and `diy.price_rub`).
+- The AI-guide fee is a **flat 150 ₽** for now (the server sends `diy.price_text` and
+  `diy.price_rub`). **No 50 ₽, no 100 ₽, and no discounts yet** — they come later.
 - Workshop price = the job's own base…difficult **range** (server sends `workshop.price_text`).
 - Multi-fault: the server applies the **single highest tier** rule.
 - Guarantee: "если не получится доделать самому, вся сумма за AI-гид зачитывается как скидка

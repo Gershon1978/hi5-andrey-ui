@@ -330,15 +330,11 @@ export default function App() {
 
   return (
     <main className="canvas">
-      {/* Header */}
+      {/* Screen 0 mark: the avatar + online ring (the wheel motif). No title, no sub. */}
       <header className="app-header">
         <div className="avatar-wrap">
           <div className="avatar">А</div>
           <div className="online-ring" title="Андрей на связи" />
-        </div>
-        <div className="header-info">
-          <div className="header-title">Андрей · AI-механик</div>
-          <div className="header-sub">Мастерская hi5.bike</div>
         </div>
       </header>
 
@@ -394,31 +390,9 @@ export default function App() {
           S0: INTRO
           ========================================================================= */}
       {state === "INTRO" && (
-        <>
-          <div className="speech-bubble">
-            «Привет, я AI-копия веломастера Андрея из мастерской hi5.bike. Чтобы я был полезен, сначала покажи, на чём катаешься.»
-          </div>
-
-          {/* Ambient Prompt: Model name */}
-          {!showModelInput ? (
-            <button
-              type="button"
-              className="ambient-toggle"
-              onClick={() => setShowModelInput(true)}
-            >
-              + Назвать модель текстом
-            </button>
-          ) : (
-            <div className="ambient-field">
-              <input
-                type="text"
-                placeholder="Модель велосипеда (напр. Scott Big Jon)"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              />
-            </div>
-          )}
-        </>
+        <div className="speech-bubble">
+          «Покажите велосипед: 10 секунд, без звука.»
+        </div>
       )}
 
       {/* =========================================================================
@@ -760,20 +734,21 @@ export default function App() {
           ========================================================================= */}
       <footer className="action-dock">
         <div className="action-dock-inner">
-          {/* INTRO state */}
+          {/* Screen 0: the ORBIT SHUTTER — the ONLY control. Opens the native camera. */}
           {state === "INTRO" && (
-            <>
-              <button
-                type="button"
-                className="btn-pill"
-                onClick={() => bikeVideoInputRef.current?.click()}
-              >
-                🎥 Показать велосипед
-              </button>
-              <div className="dock-caption">
-                Короткое видео 10 сек. без звука со стороны цепи
-              </div>
-            </>
+            <button
+              type="button"
+              className="orbit-shutter"
+              aria-label="Показать велосипед"
+              onClick={() => bikeVideoInputRef.current?.click()}
+            >
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor"
+                   strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+                <path d="M6.7 6.7l2.1 2.1M15.2 15.2l2.1 2.1M17.3 6.7l-2.1 2.1M8.8 15.2l-2.1 2.1" />
+              </svg>
+            </button>
           )}
 
           {/* CHOICE state */}
