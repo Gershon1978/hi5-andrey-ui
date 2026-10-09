@@ -77,11 +77,35 @@ things show the same product, one of them is a bug.
 | Step | Screen | The single control |
 |---|---|---|
 | 1 | tap the shutter → **10 s, silent**, drive-side | *(camera; shutter collapses)* |
-| 2 | Andrey narrates what he sees; the fork appears | «Помочь:» → `[ найти поломку ]` · `[ подобрать запчасти ]` (`dual_pill`) |
+| 2 | Andrey narrates what he sees; the fork appears | «Помочь:» → `[ Помощь в ремонте ]` · `[ Поиск запчастей ]` (`dual_pill`) |
 | 3 | **найти поломку** → **10 s, with sound** | the shutter returns, with a mic badge |
 | 4 | analysing | the same unit becomes the `ring` gauge («Андрей слушает и анализирует…») |
 | 5 | verdict | causes + **one** hero option (`verdict_card`); `deeper` ⇒ **no prices**, ≤ 2 rounds |
 | 6 | chosen path | the 150 ₽ voice-guided session, or the workshop booking, or the parts verdict |
+
+### 3.0 The fork (FROZEN 2026-10-09)
+
+Between **video 1** (silent, identification) and **video 2** (10 s, with sound) there is exactly
+one stage, and it is the fork:
+
+```
+Помочь:   [ Помощь в ремонте ]   [ Поиск запчастей ]
+```
+
+- **«Помощь в ремонте»** → video 2 with sound → diagnosis → the verdict card.
+- **«Поиск запчастей»** → the passport/standards path (photo of the marking) → fitment.
+- The lead-in is «**Помочь:**» — no question mark. The pills are **noun forms**.
+- Superseded wording — do NOT use it: «найти поломку» · «подобрать запчасти» ·
+  «с диагностикой» · «Чем помочь» · «Помощь в диагностике».
+
+### 3.1 The price — ONE number, and it is **150 ₽**
+
+- **One price exists: 150 ₽** — the voice-guided session (credited **1:1** to the part or the repair).
+- **No 50 ₽. No 100 ₽. No tiers. No discounts. No passport discount yet.** Do not render any
+  other number anywhere, in any state, on any screen.
+- The number is **never hard-coded in the UI** — it comes from the server (`diy.price_text`),
+  which now sends a flat **«150 ₽»** for every job group.
+- Prices appear **only at the verdict** — never in the `deeper` round (confidence < 80 %).
 
 ## 4. The delete list — what must NOT be on the main page (audited from the live build)
 

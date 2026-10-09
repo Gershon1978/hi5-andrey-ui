@@ -3,7 +3,33 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
-## ROUND 6 — current tasks
+## ROUND 8 — THE INTENT GATE (current)
+
+**Goal: kill "not selected yet".** The fork is asked *while the first video is being analysed*, and
+**no result of that video may be rendered until the user presses one of the two pills.**
+
+**Read `INTENT_GATE.md` — it is the contract for this round** (the law, the moment table, the state
+machine, the counters, the six test cases, converged with an external review over 4 rounds).
+Two code changes make the invariant true today; the rest of that doc is the round after.
+
+1. **No default intent.** `userIntent` is `"REPAIR" | "PARTS" | null`, initial `null`. A
+   pre-selected pill is a third state wearing a costume — it must not exist.
+2. **Delete the dock button.** In `CHOICE` the two pills are the **only** control: no
+   «Продолжить», no always-tappable escape. The dock shows the progress gauge while the receipt is
+   being computed, and **nothing else**.
+3. **The bubble is a receipt, not an answer.** While processing: «Принял видео, изучаю байк…».
+   Once the identity lands: «Вижу {make} {model} ({year}).» + «Помочь:». **No specs, no topology,
+   no fault, no price** before a tap — that is the entire point of the round.
+4. `PASSPORT` and `PARTS` remain reachable **only** through `handleSelectIntent`, which is called
+   only by a pill tap.
+5. **Do not build the rest yet** — the coarse `anchor` call with a `session_id` keyframe cache, the
+   Tier-4 copy table, the safety intercept, the mismatch bounce state and the new counters need
+   brain work and belong to the next round.
+
+**Verify:** `npm run build` green; and a manual pass proving `CHOICE` cannot be passed without a
+tap (the pill is the only exit) and the receipt shows identity and nothing else.
+
+## ROUND 6 — the design-token round (kept for reference)
 **Goal: put the app on the Andrey design standard.** Read **`DESIGN_STANDARD.md`** (new this round)
 first — it is the visual law. `DESIGN_v2.md` still owns the flow and the exact Russian copy.
 **Do not change a single string, state, transition or API call this round** — this is a visual-layer round.

@@ -72,7 +72,9 @@ function formatFileSize(bytes: number): string {
 
 export default function App() {
   const [state, setState] = useState<AppState>("INTRO");
-  const [userIntent, setUserIntent] = useState<"REPAIR" | "PARTS">("REPAIR");
+  // THE INTENT GATE: there is NO default. null = "not selected yet", and it can never
+  // render a result — the analysis states are unreachable until a pill is tapped.
+  const [userIntent, setUserIntent] = useState<"REPAIR" | "PARTS" | null>(null);
 
   // User input metadata (ambient prompts)
   const [model, setModel] = useState("");
@@ -149,7 +151,7 @@ export default function App() {
     }
   }
 
-  // Handle choice selection
+  // Handle choice selection. The ONLY caller is a pill tap — never a default, never a timer.
   function handleSelectIntent(intent: "REPAIR" | "PARTS") {
     setUserIntent(intent);
     if (intent === "PARTS") {
@@ -416,8 +418,14 @@ export default function App() {
             </div>
           )}
 
+          {/* THE RECEIPT (the intent gate): identity only — make + model + year.
+              No spec, no fault, no price may appear before a pill is tapped. */}
           <div className="speech-bubble">
-            «Принял видео, изучаю байк. Что делаем дальше?»
+            {passportLoading
+              ? "«Принял видео, изучаю байк…»"
+              : (passport?.identity?.make || passport?.identity?.model)
+                ? `«Вижу ${[passport.identity.make, passport.identity.model].filter(Boolean).join(" ")}${passport.identity.year_window ? ` (${passport.identity.year_window})` : ""}.» «Помочь:»`
+                : "«Принял видео.» «Помочь:»"}
           </div>
 
           <div className="choice-list">
@@ -751,24 +759,13 @@ export default function App() {
             </button>
           )}
 
-          {/* CHOICE state */}
-          {state === "CHOICE" && (
-            <>
-              {passportLoading ? (
-                <div className="progress-gauge">
-                  <div className="progress-title">Изучаю геометрию и трансмиссию…</div>
-                  <div className="progress-message">Выберите направление выше</div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-pill"
-                  onClick={() => handleSelectIntent(userIntent)}
-                >
-                  Продолжить: {userIntent === "REPAIR" ? "Помощь в ремонте" : "Поиск запчастей"}
-                </button>
-              )}
-            </>
+          {/* CHOICE = the parked receipt. The two pills ARE the only control:
+              no "Продолжить", no default — the gate holds until an intent is tapped. */}
+          {state === "CHOICE" && passportLoading && (
+            <div className="progress-gauge">
+              <div className="progress-title">Изучаю геометрию и трансмиссию…</div>
+              <div className="progress-message">Выберите направление выше</div>
+            </div>
           )}
 
           {/* PASSPORT state */}
