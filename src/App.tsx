@@ -418,32 +418,58 @@ export default function App() {
             </div>
           )}
 
-          {/* THE RECEIPT (the intent gate): identity only — make + model + year.
-              No spec, no fault, no price may appear before a pill is tapped. */}
+          {/* THE ASK (the intent gate). Owner's ruling: the user MUST choose BEFORE we output
+              ANY result of this video — no identity, no spec, no fault, no price. It is asked
+              WHILE we analyse, so the decision overlaps our processing. */}
           <div className="speech-bubble">
-            {passportLoading
-              ? "«Принял видео, изучаю байк…»"
-              : (passport?.identity?.make || passport?.identity?.model)
-                ? `«Вижу ${[passport.identity.make, passport.identity.model].filter(Boolean).join(" ")}${passport.identity.year_window ? ` (${passport.identity.year_window})` : ""}.» «Помочь:»`
-                : "«Принял видео.» «Помочь:»"}
+            «Пока изучаю видео, чем помочь?»
           </div>
 
+          {/* dual_pill — Hub Choice (DualPill). Two 96px cards: a 56px round wash badge with a 32px
+              monoline glyph, the owner's frozen label, and the action as the sub-label. The tap IS
+              the commit — these two cards are the ONLY way out of this screen. */}
           <div className="choice-list">
-            <div
+            <button
+              type="button"
               className={`choice-card ${userIntent === "REPAIR" ? "active" : ""}`}
+              aria-label="Помощь в ремонте: найти и устранить поломку"
               onClick={() => handleSelectIntent("REPAIR")}
             >
-              <div className="choice-card-title">Помощь в ремонте</div>
-              <div className="choice-card-sub">Разберёмся со звуками, люфтами и переключением</div>
-            </div>
+              <span className="choice-card-badge">
+                {/* monoline combination spanner at 45° — open-end jaw + box ring */}
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor"
+                     strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+              </span>
+              <span className="choice-card-text">
+                <span className="choice-card-title">Помощь в ремонте</span>
+                <span className="choice-card-sub">Найти и устранить поломку</span>
+              </span>
+            </button>
 
-            <div
+            <button
+              type="button"
               className={`choice-card ${userIntent === "PARTS" ? "active" : ""}`}
+              aria-label="Поиск запчастей: подобрать совместимую деталь"
               onClick={() => handleSelectIntent("PARTS")}
             >
-              <div className="choice-card-title">Поиск запчастей</div>
-              <div className="choice-card-sub">Определим стандарты цепи, колодок и расходников</div>
-            </div>
+              <span className="choice-card-badge">
+                {/* monoline cassette: a 3-sprocket stepped cluster (teeth + HG spline).
+                    stroke 2, not 2.5 — three concentric rings would fuse at 32 px. */}
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor"
+                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9.5" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2.5" />
+                  <path d="M12 2.5V1M19.8 4.2 20.9 3.1M21.5 12H23M19.8 19.8l1.1 1.1M12 21.5V23M4.2 19.8 3.1 20.9M2.5 12H1M4.2 4.2 3.1 3.1" />
+                </svg>
+              </span>
+              <span className="choice-card-text">
+                <span className="choice-card-title">Поиск запчастей</span>
+                <span className="choice-card-sub">Подобрать совместимую деталь</span>
+              </span>
+            </button>
           </div>
         </>
       )}

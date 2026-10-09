@@ -14,15 +14,20 @@ Two code changes make the invariant true today; the rest of that doc is the roun
 
 1. **No default intent.** `userIntent` is `"REPAIR" | "PARTS" | null`, initial `null`. A
    pre-selected pill is a third state wearing a costume — it must not exist.
-2. **Delete the dock button.** In `CHOICE` the two pills are the **only** control: no
+2. **Delete the dock button.** In `CHOICE` the two cards are the **only** control: no
    «Продолжить», no always-tappable escape. The dock shows the progress gauge while the receipt is
    being computed, and **nothing else**.
-3. **The bubble is a receipt, not an answer.** While processing: «Принял видео, изучаю байк…».
-   Once the identity lands: «Вижу {make} {model} ({year}).» + «Помочь:». **No specs, no topology,
-   no fault, no price** before a tap — that is the entire point of the round.
-4. `PASSPORT` and `PARTS` remain reachable **only** through `handleSelectIntent`, which is called
-   only by a pill tap.
-5. **Do not build the rest yet** — the coarse `anchor` call with a `session_id` keyframe cache, the
+3. **The bubble is the ASK, never a result.** It reads «Пока изучаю видео, чем помочь?» and stays
+   that way. **No identity, no «Вижу …», no spec, no blueprint, no fault, no price** before a tap —
+   that is the entire point of the round. The identity appears later, as the header of the resolved
+   screen. (An earlier draft showed a "receipt" line here; the owner overruled it.)
+4. **Two 96 px cards with our tokens** (see `INTENT_GATE.md` §8 for the full spec): a 56 px round
+   wash badge with a 32 px monoline glyph — a **combination spanner** for Ремонт, a **3-sprocket
+   cassette cluster** for Запчасти — the owner's frozen label, and the action as the sub-label. Tap
+   = instant solid `#007AFF` fill with white text, and that tap **is** the commit.
+5. `PASSPORT` and `PARTS` remain reachable **only** through `handleSelectIntent`, which is called
+   only by a card tap.
+6. **Do not build the rest yet** — the coarse `anchor` call with a `session_id` keyframe cache, the
    Tier-4 copy table, the safety intercept, the mismatch bounce state and the new counters need
    brain work and belong to the next round.
 
