@@ -1,7 +1,8 @@
 // The app talks to the brain through its own route prefix. Default is "/andrey"
 // (the AI Studio build proxies it to ANDREY_BASE via Vite). A self-hosted build can
-// inject `window.__ANDREY_BASE__` to point at a same-origin relay (e.g. "/Andrey/ui"),
-// so the SPA and the brain share an origin — no CORS, no auth bridge, no token in the browser.
+// inject `window.__ANDREY_BASE__` to point at a same-origin relay (on hi5.bike that is
+// "/Andrey/relay" — see the deployment), so the SPA and the brain share an origin:
+// no CORS, no auth bridge, no token in the browser.
 const BASE_OVERRIDE =
   (typeof window !== "undefined" && (window as any).__ANDREY_BASE__) || "";
 export const PROXY_BASE = BASE_OVERRIDE || "/andrey";
