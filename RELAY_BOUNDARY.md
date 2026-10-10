@@ -115,6 +115,25 @@ So the cap is now a **strict ceiling on spend + in-flight**, with the overshoot 
 the reservation accuracy rather than by concurrency. (An in-flight reservation dies with
 the process, which is correct: the call is gone too.)
 
+**Scope, stated accurately after the audit (2026-10-10):**
+- Every browser-reachable costed route goes through `_admit` — **after** the audit caught
+  `/api/blueprint` and `/api/blueprint/validate` classified `cheap` although they can refresh
+  from the model/web. Both are now `expensive`.
+- Direct (non-relay) calls to a costed route are token-gated — 401 without the header — so
+  the relay is not the only door. *(This audit also found that the token gate covered the
+  passport router only: `server.py`'s own routes were open to the internet. Fixed — see
+  `ANDREY_AUTH_MATRIX.md` §3, tests 7–9.)*
+- `_release` sits in a `finally:` and the upstream call is bounded by the route timeout
+  (≤180 s), so a reservation can neither be released twice nor leak on a hung call.
+- **The brake is correct for ONE worker process only.** Its ledger *and* its in-process
+  reservation state are per-process, and `ai-mechanic` runs one (`run.py --host … --port
+  8140`, single PID). `--workers N` would multiply the cap by N and split the ledger. The
+  state machine is multi-worker-safe; the brake is not.
+- The cap bounds **spend + in-flight**, so the true ceiling is
+  `cap + (reservation − real cost)` over the last admitted calls. The 30 ₽ test is
+  **evidence, not proof**: re-measure the per-route real cost when traffic is real and set
+  `_RESERVE_RUB` from it.
+
 ## 4 · STILL OPEN (do not call the relay "secured" until these land)
 
 - **Real authentication**: the hi5.bike session bridge (the shop's cookie is already
@@ -182,6 +201,17 @@ honest register.)*
 2. `state == "confirmed"` requires `confidence >= 80` — the same bar as every other price.
 3. `missing_evidence` is non-empty for every state except `confirmed`.
 4. `unresolved` carries no `standard_named` claim the model cannot support.
+5. `confidence` must be **validated as a finite number in `[0, 100]`** — reject `NaN`, `inf`,
+   numeric strings and out-of-range values before they reach any comparison.
+6. **State, evidence, SKU and price must be mutually consistent:** `confirmed` with a non-empty
+   `missing_evidence` is impossible; `compatible_unverified`/`unresolved` must carry null
+   `sku`/`price_rub`; a `sku` that is not in our catalogue is a 500, never a 200.
+7. **A model-generated confidence score is NOT proof of compatibility.** `confirmed` requires
+   **(a)** the evidence for *every* required attribute of that category **and (b)** a
+   deterministic catalogue match (`fit_status == exact`). A high score with missing evidence
+   stays `compatible_unverified`; the score may only ever *lower* the state, never raise it.
+   The evidence and the catalogue decide; the model is allowed to be a pessimist, not an
+   optimist.
 
 **The state → copy map** (one line + one control, always):
 
