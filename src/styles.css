@@ -454,13 +454,14 @@ body {
   justify-content: center;
   gap: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(224, 32, 32, 0.28);
+  text-decoration: none;   /* the PARTS dock uses this class on an <a> */
+  box-shadow: 0 6px 18px rgba(11, 37, 69, 0.18);   /* navy elevation, never a red glow */
   transition: all 0.15s ease;
   touch-action: manipulation;
 }
 
 .btn-pill:hover {
-  background: var(--danger);
+  filter: brightness(0.94);   /* red is a signal, not a decoration */
 }
 
 .btn-pill:disabled {

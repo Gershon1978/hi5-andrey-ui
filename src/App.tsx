@@ -98,7 +98,6 @@ export default function App() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [partsOrdered, setPartsOrdered] = useState(false);
 
   // File input refs
   const bikeVideoInputRef = useRef<HTMLInputElement>(null);
@@ -127,7 +126,11 @@ export default function App() {
     };
   }, [busy]);
 
-  // When bike video is chosen: immediately trigger /api/passport in background
+  // When the bike video is chosen: fire /api/passport in the background. THIS IS THE
+  // INTENTIONAL COARSE PASS — it is what makes "choose while I analyse" real, so it is
+  // allowed to run before the tap. But it MUST NOT render anything (the CHOICE render
+  // shows the ask + the two cards and nothing else), and it must never become the
+  // diagnosis: /api/flow and every price wait for the tapped intent.
   async function handleBikeVideoSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const file = filesList[0];
@@ -275,7 +278,9 @@ export default function App() {
   // Reset entire flow
   function handleReset() {
     setState("INTRO");
-    setUserIntent("REPAIR");
+    // THE INTENT GATE: a reset must clear the choice too — re-seeding it with "REPAIR"
+    // rebuilds the third state ("not selected yet" wearing a default) that we killed.
+    setUserIntent(null);
     setModel("");
     setShowModelInput(false);
     setSymptom("");
@@ -288,7 +293,6 @@ export default function App() {
     setTicket(null);
     setBusy(false);
     setErr(null);
-    setPartsOrdered(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -329,6 +333,17 @@ export default function App() {
   // Tags for passport preview
   const blueprintEntries = getNonEmptyObjectEntries(passport?.blueprint);
   const passportTags = blueprintEntries.slice(0, 3).map(([k, v]) => `${humanKey(k)}: ${v}`);
+
+  // The parts dock links to the REAL shop search: there is no parts-order endpoint in the
+  // contract and this screen carries no SKUs, so we search with the best query we have
+  // instead of faking a "request sent" state.
+  const partsQuery =
+    (Array.isArray(passport?.required_parts)
+      ? passport.required_parts.find((p: any) => typeof p === "string" && p.trim())
+      : "") ||
+    [passport?.identity?.make, passport?.identity?.model].filter(Boolean).join(" ") ||
+    model ||
+    "запчасти";
 
   return (
     <main className="canvas">
@@ -563,20 +578,29 @@ export default function App() {
       {/* =========================================================================
           S5: VERDICT_FORK
           ========================================================================= */}
+      {/* =========================================================================
+          S5: VERDICT — GATE-AWARE. Above the gate (>= 80 %) the server sends a real
+          `diy` and `workshop`; the fork renders. BELOW the gate it sends null for both,
+          and we must not invent a promise to fill the gap (SPEC.md: no prices below the
+          gate; the review that flagged this was right about the fallbacks).
+          ========================================================================= */}
       {state === "VERDICT" && verdict && (
         <>
           <div className="speech-bubble">
-            «Вот что удалось определить по звуку и механике:»
+            {verdict.gate === "verdict"
+              ? "«Вот что удалось определить по звуку и механике:»"
+              : "«Звук неоднозначный. Вот что видно — точного вывода нет:»"}
           </div>
 
-          {/* 2-round cap limit notification if reached */}
+          {/* The 2-round cap was reached while still below the gate -> say it plainly. */}
           {isCapReached && verdict.gate !== "verdict" && (
             <div className="badge-tag badge-warn" style={{ display: "block", textAlign: "center", padding: "8px 12px" }}>
-              Достигнут лимит уточнений. Показываем наиболее вероятный диагноз.
+              Достигнут лимит уточнений, уверенность ниже 80% — цен и рекомендаций по ремонту не даём.
+              Осмотр в мастерской покажет точнее.
             </div>
           )}
 
-          {/* Causes */}
+          {/* Causes — always shown; each carries its own confidence, so it never over-claims. */}
           <div className="card-unit">
             <div className="card-title">Вероятные причины</div>
             <div className="causes-list">
@@ -588,30 +612,34 @@ export default function App() {
               ))}
             </div>
 
-            {/* Fork Cards (DIY / Workshop) */}
-            <div className="fork-grid">
-              <div className="fork-card">
-                <h4>Сделать самому</h4>
-                <p>{verdict.diy?.label || "Пошаговый AI-гид по ремонту"}</p>
-                {verdict.diy?.price_text && (
-                  <div className="fork-price">{verdict.diy.price_text}</div>
-                )}
-                {typeof verdict.diy?.price_rub === "number" && !verdict.diy?.price_text && (
-                  <div className="fork-price">{verdict.diy.price_rub} ₽</div>
-                )}
-              </div>
+            {/* The DIY / workshop fork exists ONLY above the gate. */}
+            {verdict.gate === "verdict" && (
+              <>
+                <div className="fork-grid">
+                  <div className="fork-card">
+                    <h4>Сделать самому</h4>
+                    <p>{verdict.diy?.label || ""}</p>
+                    {verdict.diy?.price_text && (
+                      <div className="fork-price">{verdict.diy.price_text}</div>
+                    )}
+                    {typeof verdict.diy?.price_rub === "number" && !verdict.diy?.price_text && (
+                      <div className="fork-price">{verdict.diy.price_rub} ₽</div>
+                    )}
+                  </div>
 
-              <div className="fork-card">
-                <h4>В мастерской hi5.bike</h4>
-                <p>{verdict.workshop?.detail || "Сделаем всё за вас с гарантией"}</p>
-                {verdict.workshop?.price_text && (
-                  <div className="fork-price">{verdict.workshop.price_text}</div>
-                )}
-              </div>
-            </div>
+                  <div className="fork-card">
+                    <h4>В мастерской hi5.bike</h4>
+                    <p>{verdict.workshop?.detail || ""}</p>
+                    {verdict.workshop?.price_text && (
+                      <div className="fork-price">{verdict.workshop.price_text}</div>
+                    )}
+                  </div>
+                </div>
 
-            {verdict.guarantee && (
-              <div className="guarantee-note">{verdict.guarantee}</div>
+                {verdict.guarantee && (
+                  <div className="guarantee-note">{verdict.guarantee}</div>
+                )}
+              </>
             )}
           </div>
         </>
@@ -825,7 +853,8 @@ export default function App() {
             </div>
           )}
 
-          {/* VERDICT state */}
+          {/* VERDICT state. The workshop route is honest in BOTH cases: above the gate it
+              sits beside the fork; below it, booking is the whole answer (no prices). */}
           {state === "VERDICT" && (
             <button
               type="button"
@@ -833,7 +862,11 @@ export default function App() {
               onClick={handleHandoff}
               disabled={busy}
             >
-              {busy ? "Оформляем заявку…" : "Передать заявку в hi5.bike"}
+              {busy
+                ? "Оформляем заявку…"
+                : verdict?.gate === "verdict"
+                  ? "Передать заявку в hi5.bike"
+                  : "Записаться в мастерскую"}
             </button>
           )}
 
@@ -865,18 +898,21 @@ export default function App() {
             </button>
           )}
 
-          {/* PARTS state */}
+          {/* PARTS state. HONEST ACTION: the contract has no parts-order endpoint and this
+              screen carries no SKUs, so we do NOT fake a "request sent" success state —
+              the button opens the real shop search instead. */}
           {state === "PARTS" && (
             <>
-              <button
-                type="button"
+              <a
                 className="btn-pill"
-                onClick={() => setPartsOrdered(true)}
+                href={`https://hi5.bike/index.php?route=product/search&search=${encodeURIComponent(partsQuery)}`}
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                {partsOrdered ? "✓ Запрос на запчасти отправлен" : "Заказать через hi5.bike"}
-              </button>
+                Показать запчасти на hi5.bike
+              </a>
               <div className="dock-caption">
-                Механики проверят наличие на складе и свяжутся с вами
+                Откроется поиск в магазине hi5.bike — наличие и заказ оформляются там
               </div>
             </>
           )}

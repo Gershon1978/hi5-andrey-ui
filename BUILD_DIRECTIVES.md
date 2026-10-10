@@ -3,6 +3,17 @@
 Owner-approved. **Read `SPEC.md`, `openapi.json`, and `examples/` first — they are the
 authoritative contract.** This file is the task list; keep it in sync when you act.
 
+## Production facts (verified 2026-10-09 — do not re-litigate)
+
+- The UI is served at **https://hi5.bike/Andrey/** and reaches the brain only through
+  **same-origin `/Andrey/relay/api/*`**. The token is injected **server-side**; the browser never
+  sees it (verified: 0 occurrences in `index.html` and `assets/*.js`).
+- The relay is **not an open proxy**: it requires a same-site caller (`Sec-Fetch-Site: same-origin`,
+  or a same-host `Origin` / `Referer`) **and** a per-IP rate limit. A bare `curl` gets **401**; a real
+  browser gets **200** (both verified live). Do not "simplify" this away.
+- `gate:"deeper"` ⇒ the server sends `diy = null` and `workshop = null`. The UI must **not** render
+  the fork, the guarantee, or any price unless `gate === "verdict"`.
+
 ## ROUND 8 — THE INTENT GATE (current)
 
 **Goal: kill "not selected yet".** The fork is asked *while the first video is being analysed*, and
