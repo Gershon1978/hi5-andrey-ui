@@ -91,6 +91,30 @@ braced by the 3-uploads-per-hour-per-IP limit, because none of them can be reach
 pushing a real 10–20 MB video through the gate. Every real cost lands in the ledger via
 `mechanic/clients.py` (`ledger.add(Call(...))`), which is exactly what the brake reads.
 
+## 3c · THE STRICT CEILING (the concurrency race, and how it was closed)
+
+Durable deltas bound **completed** spend. They cannot bound a **burst**: ten expensive
+requests arriving together can all pass the budget check before any of their costs land.
+Measured first, then fixed — admission is now **check + reserve in one synchronous block
+with no `await` between them** (atomic on a single event loop), and each in-flight
+expensive call holds a generous estimate (`media` 25 ₽, `expensive` 12 ₽) until its real
+cost is accrued. `inflight` is capped at 3, and the reservation is released in `finally`.
+
+**Proof (live, with the cap temporarily lowered to 30 ₽):**
+
+```
+6 PARALLEL costed calls  →  req2 200 · req3 200 · req4 200   (exactly 3 admitted)
+                            req1 429 · req5 429 · req6 429   ("Сейчас много запросов…")
+ledger real spend        =  1.51652 ₽
+durable deltas on disk   =  0.50323 + 0.52370 + 0.48959 = 1.5165 ₽   ← reconcile exactly
+in flight after          =  0 · reserved 0.0                          ← all released
+cap restored             =  3000 ₽
+```
+
+So the cap is now a **strict ceiling on spend + in-flight**, with the overshoot bounded by
+the reservation accuracy rather than by concurrency. (An in-flight reservation dies with
+the process, which is correct: the call is gone too.)
+
 ## 4 · STILL OPEN (do not call the relay "secured" until these land)
 
 - **Real authentication**: the hi5.bike session bridge (the shop's cookie is already
@@ -127,11 +151,45 @@ tolerances — three states, and the middle one is where honesty lives:
 **The threshold ruling (this conflict was real):** our routing threshold is 75 % but our
 money law is 80 %. **The money bar wins — CONFIRMED sits strictly at ≥ 80 %; never lower
 the price threshold to the routing threshold.** In the 75–79 % window the route proceeds
-(directly, with no generic clarification fork), the standard is named, and the screen asks
-for the one photo that can cross the line:
-> «Совместимость подтверждена: кассета 10 скоростей (посадка Shimano HG, диапазон 11–46T).»
-> «Чтобы показать точный артикул и цену, подтвердите маркировку: на фото не виден износ зубьев и точный индекс модели.»
-> **[ Сфотографировать маркировку крупнее ]**
+(directly, with no generic clarification fork), the standard is named — and **the copy must
+never claim confirmation**:
+
+> «Похоже, это кассета на 10 скоростей, стандарт Shimano HG, диапазон 11–46T.»
+> «Чтобы подтвердить точную совместимость, нужна фотография маркировки — на общем плане не видно индекс модели и износ зубьев.»
+> **[ Сфотографировать маркировку ]**
+
+*(An earlier draft of this doc said «Совместимость подтверждена» here. Caught in review: at
+75–79 % the state is COMPATIBLE-BUT-UNVERIFIED, and the user must never have to infer the
+difference between a likely match and a verified one. «Похоже» + what is missing is the
+honest register.)*
+
+### The three states, explicit in the API contract (target)
+
+```json
+// GET/POST /api/parts/fitment  ->  this is the only shape the UI may render
+{ "fit": {
+    "state": "confirmed" | "compatible_unverified" | "unresolved",
+    "standard_named": "кассета 10 скор., Shimano HG, 11–46T",
+    "missing_evidence": ["маркировка кассеты", "число звеньев цепи"],
+    "confidence": 82,
+    "sku": "ACSM410010142",      // null unless state == "confirmed"
+    "price_rub": 5749            // null unless state == "confirmed"
+} }
+```
+
+**Invariants the server must enforce (not the UI):**
+1. `sku` and `price_rub` are `null` unless `state == "confirmed"`.
+2. `state == "confirmed"` requires `confidence >= 80` — the same bar as every other price.
+3. `missing_evidence` is non-empty for every state except `confirmed`.
+4. `unresolved` carries no `standard_named` claim the model cannot support.
+
+**The state → copy map** (one line + one control, always):
+
+| state | the line | the control |
+|---|---|---|
+| `confirmed` | the exact part + price from the server | [ Заказать деталь ] / [ Инструкция по замене ] |
+| `compatible_unverified` | «Похоже, это {standard}. Чтобы подтвердить точную совместимость, нужна фотография {missing}.» | [ Сфотографировать маркировку ] |
+| `unresolved` | «По одному видео стандарт не определить — {почему}.» | [ Сфотографировать узел ] |
 
 **The evidence ladders for our highest-volume categories:**
 
@@ -162,4 +220,20 @@ users), R3 (I corrected its route table against our real `openapi.json` and flag
 booking/orders = identity-required, and delivered the fitment contract), R4 (it ruled 80 %
 over 75 %, demanded durable spend accounting, and produced the rule block). Everything in
 §2, §3 and §3b was then implemented and verified live.
+
+## 7 · THE SPA DEPLOY (2026-10-10, live)
+
+The review-fix bundle is deployed to `/Andrey/` and verified in a real browser:
+`/Andrey/assets/index-BqH-3e6q.js` + `/Andrey/assets/index-ihNSyzSH.css` (local md5 =
+server md5), the served bundle carries the ask line and the two cards and contains **0**
+occurrences of the old «Продолжить: » leak, and the guarded screen shows one control.
+
+**A deploy bug was found and fixed on the way in:** the live `index.html` had **no
+`window.__ANDREY_BASE__` injection**, so `PROXY_BASE` fell back to `"/andrey"` — and nginx
+has no lowercase `/andrey` location (locations are case-sensitive), so the app's own API
+calls were going to the shop and failing silently (the shop's catch-all answers 200 with
+HTML). The injection is now in the served HTML: `window.__ANDREY_BASE__ = "/Andrey/relay";`,
+and an in-page `fetch(__ANDREY_BASE__ + '/api/health')` returns the live brain payload.
+**Any future SPA deploy must re-apply that injection** — it is not part of the Vite output.
+Rollback: `/root/aim/backup_ui_ask_20261010_214512.tar.gz`.
 
