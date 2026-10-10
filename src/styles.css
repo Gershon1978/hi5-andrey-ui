@@ -393,7 +393,10 @@ body {
   background: #fff;
 }
 
-/* Error banner */
+/* Recovery banner.
+   Red is a SIGNAL (stop/danger), never decoration — DESIGN_STANDARD §7. A rate or upload
+   limit is not a danger, so it gets the soft hairline treatment; only a genuine analysis
+   failure keeps the red. The three actions are equal-weight pills, never all-red. */
 .error-banner {
   background: var(--white);
   border: 1px solid var(--danger);
@@ -404,14 +407,45 @@ body {
   color: var(--danger);
 }
 
+.error-banner.is-limit {
+  border-color: var(--hair);
+  color: var(--navy);
+}
+
+.banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .error-banner button {
-  margin-top: 8px;
-  padding: 8px 16px;
+  margin-top: 0;
+  padding: 10px 16px;
   font-size: 14px;
   min-height: auto;
-  background: var(--danger);
-  color: #fff;
   width: auto;
+  border-radius: 999px;
+  background: var(--white);
+  border: 1px solid var(--hair);
+  color: var(--navy);
+  cursor: pointer;
+}
+
+.error-banner button:hover {
+  background: var(--wash);
+}
+
+/* The paid door: the one solid-blue action in the banner. */
+.error-banner button.btn-pro {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--white);
+}
+
+.error-banner button.btn-pro:hover {
+  background: var(--blue);
+  opacity: 0.92;
 }
 
 /* Morphing Action Unit (Fixed at bottom) */

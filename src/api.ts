@@ -7,6 +7,19 @@ const BASE_OVERRIDE =
   (typeof window !== "undefined" && (window as any).__ANDREY_BASE__) || "";
 export const PROXY_BASE = BASE_OVERRIDE || "/andrey";
 
+// An error that keeps the HTTP status and the machine-readable `code` the relay now returns
+// (`upload_limit` / `rate_limit`). Without this the UI cannot tell "you hit the upload limit"
+// from "the analysis failed", which is why it used to offer a Retry that was doomed to fail.
+export class ApiError extends Error {
+  status: number;
+  code: string;
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.status = status;
+    this.code = code || "";
+  }
+}
+
 async function jsonFetch(url: string, init?: RequestInit) {
   const res = await fetch(url, init);
   const txt = await res.text();
@@ -16,7 +29,10 @@ async function jsonFetch(url: string, init?: RequestInit) {
   } catch {
     data = { raw: txt };
   }
-  if (!res.ok) throw new Error((data && data.detail) || res.statusText || String(res.status));
+  if (!res.ok) {
+    const msg = (data && (data.detail || data.error)) || res.statusText || String(res.status);
+    throw new ApiError(msg, res.status, (data && data.code) || "");
+  }
   return data;
 }
 

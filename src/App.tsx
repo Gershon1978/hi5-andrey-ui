@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 
 type AppState =
   | "INTRO"
@@ -97,6 +97,14 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  // The relay's machine-readable 429 code (`upload_limit` | `rate_limit` | ""). Without it the
+  // banner cannot tell a doomed Retry from a real analysis failure — see `noteError`.
+  const [errCode, setErrCode] = useState<string>("");
+  // Passport extraction failed -> the typed-model bridge is now the primary path, not a link.
+  const [passportFailed, setPassportFailed] = useState(false);
+  // Provenance of the verdict on screen: "video" (the normal funnel) or "text" (the free
+  // text-only fallback). The user must never be told we watched something we didn't.
+  const [verdictSource, setVerdictSource] = useState<"video" | "text">("video");
   const [copied, setCopied] = useState(false);
 
   // File input refs
@@ -136,6 +144,7 @@ export default function App() {
     const file = filesList[0];
     setBikeVideo(file);
     setErr(null);
+    setErrCode("");
     setState("CHOICE");
 
     setPassportLoading(true);
@@ -143,14 +152,120 @@ export default function App() {
       const p = await api.passport([file], model, true);
       const resolved = p.passport || p;
       setPassport(resolved);
+      setPassportFailed(false);
       if (resolved?.identity?.make || resolved?.identity?.model) {
         const fullModel = [resolved.identity.make, resolved.identity.model].filter(Boolean).join(" ");
         if (!model) setModel(fullModel);
       }
     } catch (e: any) {
+      // DO NOT strand the user: a failed identification is not a dead end. The typed-model
+      // bridge (`passport_from_model`) reaches the same S1 state without any video, so open
+      // the field instead of swallowing the error and rendering an empty "Я узнал твой байк".
       console.warn("Passport extraction fallback:", e);
+      setPassportFailed(true);
+      setShowModelInput(true);
     } finally {
       setPassportLoading(false);
+    }
+  }
+
+  // One place that records WHY a call failed, so the banner can act on the code rather than
+  // on a Russian string. `code` comes from the relay's 429 payloads.
+  function noteError(e: any) {
+    const code = e instanceof ApiError ? e.code : "";
+    setErrCode(code);
+    setErr(e?.message || String(e));
+  }
+
+  function clearErr() {
+    setErr(null);
+    setErrCode("");
+  }
+
+  // ── Reach S1 without a video ────────────────────────────────────────────────────────────
+  // /api/verdict requires the bike-identification stage. A user who can't upload (limit,
+  // no camera, dead connection) still gets there through the MODEL-ONLY passport: typed model
+  // -> KB lookup -> stage advanced. Proven on the server with the model client replaced by a
+  // bomb: 200, stage 0 -> 1, ZERO model calls, make='Scott'. It carries no file, so the relay
+  // spends none of the 12 accepted-upload slots either.
+  async function ensureSession(): Promise<boolean> {
+    if (flowResult?.session_id) return true;         // already past S1
+    const m = model.trim();
+    if (!m) {
+      setShowModelInput(true);
+      setShowSymptomInput(true);
+      setErr("Нужна модель велосипеда — без неё я не к чему привязать диагноз.");
+      setErrCode("");
+      return false;
+    }
+    try {
+      const p = await api.passport([], m, false);
+      setPassport(p.passport || p);
+      return true;
+    } catch (e: any) {
+      noteError(e);
+      return false;
+    }
+  }
+
+  // ── The FREE text-only fallback ─────────────────────────────────────────────────────────
+  // For a user who cannot upload (limit reached, no camera, dead connection) Andrey must still
+  // help: they type the bike and the symptom, and we answer from the deterministic ruleset.
+  // Proven on the server (2026-10-10, model client replaced by a bomb):
+  //   the model is NEVER called · no costed-verdict counter is consumed · spend unchanged.
+  async function runTextVerdict() {
+    const symptomText = symptom.trim();
+    const modelText = model.trim();
+    if (!symptomText && !modelText) {
+      setShowSymptomInput(true);
+      setShowModelInput(true);
+      setErr("Опишите проблему словами — по тексту я всё ещё могу помочь.");
+      setErrCode("");
+      return;
+    }
+    clearErr();
+    setBusy(true);
+    try {
+      if (!(await ensureSession())) return;
+      const res = await api.verdict({
+        symptom: symptomText || "Шум или люфт в узле",
+        model: modelText,
+        use_model: false,      // the free, deterministic path — never the paid one
+      });
+      setFlowResult({ verdict: res.verdict || res, session_id: res.session_id });
+      setVerdictSource("text");
+      setState("VERDICT");
+    } catch (e: any) {
+      noteError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── The PAID alternative: a PRO mechanic session ────────────────────────────────────────
+  // Always offered alongside the free path, because a paying customer who cannot upload must
+  // still be able to buy real help. This runs the full model diagnosis (use_model: true) and
+  // the resulting verdict card carries the server's price; checkout itself lands on the
+  // workshop handoff, which is still identity-gated until the shop-session bridge exists.
+  async function runProVerdict() {
+    const symptomText = symptom.trim() || "Шум или люфт в узле";
+    const modelText = model.trim();
+    clearErr();
+    setBusy(true);
+    try {
+      if (!(await ensureSession())) return;
+      const res = await api.verdict({
+        symptom: symptomText,
+        model: modelText,
+        use_model: true,
+      });
+      setFlowResult({ verdict: res.verdict || res, session_id: res.session_id });
+      setVerdictSource("text");
+      setState("VERDICT");
+    } catch (e: any) {
+      noteError(e);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -178,6 +293,7 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.flow([file], symptomText, modelText);
       setFlowResult(res);
+      setVerdictSource("video");
 
       if (res?.passport && !passport) {
         setPassport(res.passport);
@@ -190,7 +306,7 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
-      setErr(e.message || String(e));
+      noteError(e);
     } finally {
       setBusy(false);
     }
@@ -206,6 +322,7 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.flow([problemVideo], symptomText, modelText);
       setFlowResult(res);
+      setVerdictSource("video");
       const verdict = res?.verdict;
       if (verdict?.gate === "deeper" && (verdict?.round_no ?? 0) < 2) {
         setState("DEEPER");
@@ -213,7 +330,7 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
-      setErr(e.message || String(e));
+      noteError(e);
     } finally {
       setBusy(false);
     }
@@ -234,6 +351,7 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.deeper(newFiles, symptomText, modelText, nextRound);
       const updatedVerdict = res.verdict || res;
+      setVerdictSource("video");
 
       const updatedFlow = {
         ...flowResult,
@@ -247,7 +365,7 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
-      setErr(e.message || String(e));
+      noteError(e);
     } finally {
       setBusy(false);
     }
@@ -269,7 +387,7 @@ export default function App() {
       setTicket(t.ticket || t);
       setState("TICKET");
     } catch (e: any) {
-      setErr(e.message || String(e));
+      noteError(e);
     } finally {
       setBusy(false);
     }
@@ -293,6 +411,9 @@ export default function App() {
     setTicket(null);
     setBusy(false);
     setErr(null);
+    setErrCode("");
+    setPassportFailed(false);
+    setVerdictSource("video");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -355,13 +476,37 @@ export default function App() {
         </div>
       </header>
 
-      {/* Network Failure Banner (Edge Case §5) */}
+      {/* Recovery banner (Edge Case §5 + the 2026-10-10 "don't strand the user" pass).
+          Three different failures, three different answers:
+            upload_limit -> a Retry is GUARANTEED to fail (the same IP bucket), so we do not
+                            offer one; we offer the free text diagnosis instead.
+            rate_limit   -> a minute's pause really does clear it, so Retry stays.
+            anything else-> a genuine analysis failure: Retry is legitimate. */}
       {err && (
-        <div className="error-banner">
-          <div>Что-то пошло не так при анализе. Файлы сохранены. Попробуем ещё раз?</div>
-          <button type="button" onClick={state === "ANALYZING" ? retryProblemVideo : () => setErr(null)}>
-            Повторить
-          </button>
+        <div className={`error-banner ${errCode ? "is-limit" : ""}`}>
+          <div>
+            {errCode === "upload_limit"
+              ? "На этот час загрузки видео исчерпаны. Загрузки подождут — а помочь могу уже сейчас по описанию: опишите проблему словами."
+              : errCode === "rate_limit"
+              ? "Серверу нужно передохнуть. Через минуту попробуйте снова — или опишите проблему словами, я отвечу без видео."
+              : "Что-то пошло не так при анализе. Файлы сохранены. Попробуем ещё раз?"}
+          </div>
+          <div className="banner-actions">
+            {errCode !== "upload_limit" && state === "ANALYZING" && (
+              <button type="button" onClick={retryProblemVideo}>
+                Повторить
+              </button>
+            )}
+            {/* The free alternative — always available, always 0 ₽ (the server never calls a
+                model on this path; proven with a bomb on the model client). */}
+            <button type="button" onClick={runTextVerdict}>
+              Описать словами — бесплатно
+            </button>
+            {/* The paid alternative — a customer willing to pay must never be stranded either. */}
+            <button type="button" className="btn-pro" onClick={runProVerdict}>
+              Сессия с механиком · 150 ₽
+            </button>
+          </div>
         </div>
       )}
 
@@ -494,12 +639,22 @@ export default function App() {
           ========================================================================= */}
       {state === "PASSPORT" && (
         <>
+          {/* A passport without an identity is NOT an identification. Before this pass the
+              screen said «Я узнал твой байк: Велосипед» when extraction failed — a confident
+              claim about nothing, which is exactly the lie that kills trust. */}
           <div className="speech-bubble">
-            «Я узнал твой байк: <strong>{passport?.identity?.make || model || "Велосипед"} {passport?.identity?.model || ""}</strong> {passport?.identity?.year_window ? `(${passport.identity.year_window})` : ""}. Теперь покажи, что случилось.»
+            {passportFailed || !passport?.identity?.make
+              ? "«Модель по видео определить не удалось — бывает. Напишите её, и я продолжу:»"
+              : "«Я узнал твой байк: <strong>" + (passport?.identity?.make || "") + " " +
+                (passport?.identity?.model || "") + "</strong> " +
+                (passport?.identity?.year_window ? `(${passport.identity.year_window}) ` : "") +
+                "Теперь покажи, что случилось.»"}
           </div>
 
           <div className="card-unit">
-            <span className="badge-tag">✓ Велосипед опознан</span>
+            <span className={`badge-tag ${passportFailed ? "badge-warn" : ""}`}>
+              {passportFailed ? "Модель нужна вручную" : "✓ Велосипед опознан"}
+            </span>
             <div style={{ fontSize: "18px", fontWeight: 700, margin: "4px 0" }}>
               {[passport?.identity?.make, passport?.identity?.model, passport?.identity?.year_window].filter(Boolean).join(" ") || model || "Ваш велосипед"}
             </div>
@@ -552,6 +707,20 @@ export default function App() {
               />
             </div>
           )}
+
+          {/* The PAID alternative, kept as a micro-link so it never competes with the primary
+              action (one control at a time, P3). A customer who would rather pay than film
+              must always have that door open. */}
+          <button type="button" className="micro-link" onClick={runProVerdict}>
+            Сразу к механику · платная сессия 150 ₽
+          </button>
+          {/* The FREE text alternative next to it: no camera, no video — still a diagnosis.
+              Only shown once a model is present, because /api/verdict needs S1. */}
+          {model.trim() && (
+            <button type="button" className="micro-link" onClick={runTextVerdict}>
+              Описать проблему словами — бесплатно
+            </button>
+          )}
         </>
       )}
 
@@ -587,7 +756,9 @@ export default function App() {
       {state === "VERDICT" && verdict && (
         <>
           <div className="speech-bubble">
-            {verdict.gate === "verdict"
+            {verdictSource === "text"
+              ? "«Это предварительный вывод по вашему описанию — видео я не смотрел.»"
+              : verdict.gate === "verdict"
               ? "«Вот что удалось определить по звуку и механике:»"
               : "«Звук неоднозначный. Вот что видно — точного вывода нет:»"}
           </div>
