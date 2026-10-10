@@ -65,27 +65,63 @@ customer) · **internal** (token only, never browser-reachable).
    product depends on; the SPA has no login UI yet, so requiring identity here would break a
    live button with no way for the user to comply. `book`/`basket`/`audio` — the genuinely
    irreversible, customer-specific actions — are identity-required now.
-## 3 · THE TESTS (the negative cases, and their status)
+## 3 · THE TESTS — ACTUAL RESULTS
 
-Against `http://127.0.0.1:8140` with the token / a cookie jar, and through the public relay.
-**Status column = what has actually been run**, not what is planned.
+**Unit (`web/funnel_state.py`, in-process, real SQLite, real threads): 31 PASS / 0 FAIL.**
 
-| # | the negative case | the expected answer | status |
-|---|---|---|---|
-| 1 | **direct-to-expensive route**, no cookie: `POST /api/flow` | 401 (fail closed, never "continue anyway") | ⏳ needs the wiring |
-| 2 | **skipped stage**: a fresh session (S0) → `POST /api/deeper` | 409 «Пропущен шаг» | ⏳ needs the wiring |
-| 3 | **replay**: repeat the S1→S2 transition after it succeeded | 409 / the cached verdict (`sessions.set_analysis` already stores it) — never a second paid run | ⏳ needs the wiring |
-| 4 | **parallel**: two simultaneous `POST /api/flow` on one session | exactly one 200; the other 409 (the lease CAS) | ⏳ needs the wiring |
-| 5 | **expiry**: a session row with `expires` in the past | 401 | ⏳ needs the wiring |
-| 6 | **another session**: a valid cookie + a *different* `session_id` in the body | the cookie's session is used; the body value is ignored | ⏳ needs the wiring |
-| 7 | **no token, from the internet**: `POST /api/book` | **401** | ✅ **done — was 200** |
-| 8 | **no token**: `POST /api/chat`, `/api/identify`, `/api/media`, `/api/basket/add` | **401** | ✅ **done — were 200/422** |
-| 9 | **no token**: `GET /api/ledger` (our spend + funnel) | **401** | ✅ **done — was open** |
-| 10 | the three cheap read-only ones stay reachable | 200 | ✅ done (`health`, `services`) |
-| 11 | a token holder is unaffected | 200 | ✅ done (`ledger`, `health`) |
-| 12 | the relay still works (it injects the token itself) | 200 / 404 / 401 per its own rules | ✅ done |
+```
+PASS  a fresh session is S0                     PASS  the capability is >= 32 bytes
+PASS  sid ALONE is not a capability             PASS  sid + a wrong cap is refused
+PASS  sid + the right cap is accepted           PASS  another session's cap is refused
+PASS  an expired session resolves to None       PASS  an expired cookie is refused
+PASS  S0->S1 wins                               PASS  the SAME transition replayed loses
+PASS  S1->S2 wins                               PASS  S1->S2 replayed loses
+PASS  a stage cannot go backwards               (this one FAILED first — see §6)
+PASS  exactly ONE of 8 parallel transitions won (got 1)
+PASS  the first lease is granted                PASS  a second concurrent lease is REFUSED
+PASS  an EXPIRED lease is reusable              PASS  the crash did NOT consume the stage
+PASS  ...the retry may advance                  PASS  the stage STILL consumes only once
+PASS  exactly ONE of 8 parallel leases won (got 1)
+PASS  deeper #1 / #2 allowed, #3 REFUSED        PASS  costed verdict #1 allowed, #2 REFUSED
+PASS  handoff #1 allowed, #2 REFUSED
+```
 
-**What tests 7–9 proved, exactly:**
+**Live, from an external client over the public relay: 9 PASS / 0 FAIL (binding) + 16 PASS / 0 FAIL
+(the rest).**
+
+| # | what | result |
+|---|---|---|
+| B1 | `verdict`, no cookie | **401** «Сессия не найдена или истекла» |
+| B2 | valid cookie at S0 | **409** «Пропущен шаг: сначала S1_BIKE_SEEN» |
+| B3 | `sid` + **forged cap** | **401** |
+| B4 | **bare `sid`**, no capability | **401** |
+| B5 | **expired** session | **401** |
+| B6 | `sid A` + **cap of session B** | **401** |
+| B7 | session B's own stage | **409** (its own S0 — sessions are independent) |
+| B8 | `handoff` at S0 | **409** «сначала S2_VERDICT» |
+| B9 | the 0 ₽ `verdict` path is gated too | **409** |
+| A3 | **`Set-Cookie` returned THROUGH the relay** | ✅ `Path=/Andrey; Max-Age=1800; HttpOnly; SameSite=strict; Secure` |
+| D1 | `handoff` at S2 (fresh session) | **200** + a ticket |
+| D2 | the same `handoff` **replayed** | **409** «Заявка по этой сессии уже создана» |
+| D3 | **two concurrent** handoffs, one session | **200 / 409** — exactly one ticket |
+| C1 | malformed JSON at S2 | **422** (the gate let it through to the schema) |
+| C2 | 20 KB body at S2 (16 KB cap) | **413** |
+| E1–E5 | relay health/capture/services, SPA page + bundle | **200 200 200 200 200** |
+| E6 | relay `/ledger` | **404** (our spend refused) |
+| E7 | `X-HTTP-Method-Override` | **400** |
+| E8 | no same-site proof | **401** |
+| F | **spend for the whole suite** | `calls 0, total_rub 0` → **0 ₽** |
+
+Browser: the SPA loads, the intent gate renders («Покажите велосипед…» + the button), console clean
+for the page; the SPA's relay calls return 200.
+
+**Two runs were invalid and are reported as such, not as passes:** a server-side run came back
+`429` on the whole A-block because that IP had already spent both the relay's 12/300 s budget and
+the 3-videos/hour ingest brake — the brakes working, but masking the gate. Re-run from a fresh
+client IP without any media route, the block is the 9/9 above.
+
+
+## 3b · THE ROUTER HOLE (closed 2026-10-10)
 
 ```
 BEFORE                                  AFTER
@@ -104,35 +140,53 @@ with a global `/api/*` middleware in `server.py` (three cheap read-only routes e
 top of the relay's own allowlist which never exposed them anyway. This is a *different* hole
 from the relay one: the relay was an open proxy; this was an ungated router.
 
-## 4 · WHAT IS ENFORCED TODAY vs WHAT THE MODULE ADDS
+## 4 · WHAT IS ENFORCED TODAY
 
-**Enforced today (verified live):**
-1. The relay: same-site caller, an 11-route allowlist, method/verb/body guards, the
-   per-IP limits, the video-ingest brake, the rolling-24 h spend brake with reservations.
-2. **The token gate is now global** for `/api/*` (tests 7–11).
-3. Per-route cost classification — including the **`blueprint` fix**: the brake audit found
-   `/api/blueprint` (+ `/validate`) classified `cheap` although it can refresh from the
-   model/web, so a costed route was exempt from the reservation. Now `expensive`.
-
-**The module adds (built, not yet wired):** the stage machine, the CAS transitions, the
-lease, the per-session caps, the cookie, and the identity gate. Wiring it means editing six
-handler bodies in `passport_api.py` (place the `gate(...)` dependency, take the lease on the
-costed routes, `advance()` on success) — a mechanical but invasive change that must land
-with its own test run, not at the end of a long session.
+1. The relay: same-site caller, an 11-route allowlist, method/verb/body guards, the per-IP
+   limits, the video-ingest brake, the rolling-24 h spend brake with reservations.
+2. **The token gate is global** for `/api/*` (`health`/`capture`/`services` exempt).
+3. Per-route cost classification, including the `blueprint` reclassification to `expensive`.
+4. **The funnel state machine, wired and live**: `passport` (S0 → mint → S1), `flow` (S1 → S2),
+   `deeper` (S2 + ≤2 rounds), `verdict` (S1 + ≤1 costed call), `handoff` (S2 + ≤1 ticket),
+   `capture/check` (S0, mints early), `audio` (S2 + identity → fails closed).
+   The relay now **transports the session cookie** both ways — it did not before (§6, #2).
 
 ## 5 · THE HONEST GAPS
 
-1. **No real identity resolution yet** (the shop-session bridge) — identity-required routes
-   fail closed.
-2. **The state machine is not wired**, so the funnel is still ordered only by the SPA.
-3. **Single worker only.** The spend brake's ledger *and* its in-process reservation state
-   are per-process, and the app runs one worker today (`run.py --host … --port 8140`, one
-   PID). Running `--workers N` would multiply the cap by N and split the ledger. The state
-   machine is already multi-worker-safe (SQLite + CAS); the brake is not, and that constraint
-   is now written down rather than assumed.
-4. **The cap is only as tight as the reservation estimates.** It bounds spend + in-flight, so
-   the overshoot is bounded by how well `_RESERVE_RUB` (`media` 25 ₽, `expensive` 12 ₽)
-   covers the real per-call cost — evidence, not proof. Re-measure when traffic is real.
-5. The **fitment contract** (`RELAY_BOUNDARY.md` §5) is a contract, not code: the brain does
-   not yet emit `state`/`missing_evidence`, so nothing enforces those invariants today.
+1. **No identity resolution yet** (the shop-session bridge) → `book`/`basket`/`audio` fail closed.
+2. **A deliberate re-analysis is allowed by design.** `flow`/`passport` are gated "≥ S1 / ≥ S0"
+   because a visitor must be able to analyse a second bike. A retry after a *failure* is
+   legitimate; a manual re-shoot re-runs the paid flow. An exact-stage gate is a product decision,
+   not a bug fix, and it was not taken in this pass.
+3. **The residual duplicate window.** If the process dies between the upstream 2xx and the
+   `advance()` write, a retry re-runs that one paid call. The media routes carry no upstream
+   idempotency key, so the guarantee is *at most one duplicate across a crash* — not exactly-once.
+   The write sits adjacent to the call (nothing in between), which shrinks the window to a single
+   SQLite write; it does not close it.
+4. **Single worker.** The brake's ledger *and* its reservations are per-process; the state machine
+   is multi-worker-safe (SQLite + CAS). `--workers N` would multiply the cap by N.
+5. **The cap is only as tight as `_RESERVE_RUB`** (`media` 25 ₽, `expensive` 12 ₽) — evidence, not proof.
+6. **The full media happy path was not run end-to-end** (it needs a real video, a camera and money).
+   Proven instead: the gate order, the cookie transport, the transitions (unit), and that an upload
+   does reach the brain through the relay (its ffprobe rejection came back at 19:15). The unproven
+   step is a real video producing S1→S2 over HTTP.
+7. The **fitment contract** (`RELAY_BOUNDARY.md` §5) is still a contract, not code.
+
+## 6 · WHAT THE TESTS CAUGHT (why they were worth writing)
+
+1. **`advance()` was not monotonic.** `advance(sid, S2, S1)` *succeeded*, so a caller could walk the
+   funnel backwards. The wired routes only ever pass ascending stages, so it was not exploitable —
+   but the invariant now lives in the SQL (`AND stage<?`), not in the callers' discipline.
+2. **The relay did not transport the cookie.** It built a fresh header dict (`content-type` + token)
+   and returned only `content/status/content-type`, so the browser's session never reached the
+   handler and `Set-Cookie` never reached the browser: every relayed call would have looked like a
+   brand-new session, and `flow` would have 409'd on the live SPA. Fixed: forward `Cookie` in,
+   `set-cookie` out.
+3. **FastAPI discards headers written to an injected `Response`** when the endpoint returns its own
+   Response object — and `passport` (the first route that can mint) returns a `JSONResponse`. A
+   cookie set inside the dependency would have been silently dropped one step into the funnel.
+   Fixed with a middleware that mutates the real outgoing response.
+4. **`handoff` costs 0 ₽** (`build_verdict(..., use_model=False)` by default) — which is why it was
+   the right free route for the positive/replay/parallel tests, and why the suite cost nothing.
+
 

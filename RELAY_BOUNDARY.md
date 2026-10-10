@@ -134,6 +134,26 @@ the process, which is correct: the call is gone too.)
   **evidence, not proof**: re-measure the per-route real cost when traffic is real and set
   `_RESERVE_RUB` from it.
 
+## AUTHORIZATION IS NOW ENFORCED (2026-10-10)
+
+The three controls are separate, and only two were ever finished: **request protection** ✅,
+**spend protection** ✅, **authorization** — previously unstarted, now enforced and tested.
+`web/funnel_state.py` mints the session **server-side**, binds it to a capability (the cookie is
+`sid.cap`, `HttpOnly; SameSite=strict; Secure; Path=/Andrey`, 30 min sliding), keeps the stage in
+SQLite with compare-and-set transitions, holds **one paid call per session at a time** with a
+wall-clock lease (a crashed worker cannot strand a user), and caps the costed operations
+(`verdict` ≤1, `deeper` ≤2, `handoff` ≤1 ticket). The stage only moves forwards — enforced in the
+SQL, after a test caught a backwards transition. Client-supplied `session_id` values are ignored.
+
+The relay now **transports the session cookie in both directions**; without that the funnel was
+broken at the transport layer, not at the policy layer. The route/state/authorization matrix, the
+31 unit assertions and the live matrix are in `AUTH_MATRIX.md`.
+
+**Still open:** identity is not resolved (the shop-session bridge), so `book`/`basket`/`audio` fail
+closed; `flow`/`passport` remain re-runnable by design (a second bike); and a crash between the
+upstream 2xx and the recorded transition can duplicate one paid call — at most one, only across a
+crash, because the media routes carry no upstream idempotency key.
+
 ## 4 · STILL OPEN (do not call the relay "secured" until these land)
 
 - **Real authentication**: the hi5.bike session bridge (the shop's cookie is already
