@@ -448,6 +448,28 @@ body {
   opacity: 0.92;
 }
 
+/* FIX 2/3 companion: an in-flight button must LOOK inert, and the code-keyed hint lines
+   must read as advice, not as a second error. */
+.error-banner button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.error-banner button:disabled:hover {
+  background: var(--white);
+  opacity: 0.55;
+}
+
+.error-banner button.btn-pro:disabled:hover {
+  background: var(--blue);
+}
+
+.hint-line {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--navy);
+}
+
 /* Morphing Action Unit (Fixed at bottom) */
 .action-dock {
   position: fixed;

@@ -145,6 +145,10 @@ export default function App() {
     setBikeVideo(file);
     setErr(null);
     setErrCode("");
+    // FIX 1b: a new attempt clears the failure flag FIRST. Until the attempt resolves, the
+    // screen must show neither the success badge nor the failure branch — both are claims
+    // about an answer we do not have yet.
+    setPassportFailed(false);
     setState("CHOICE");
 
     setPassportLoading(true);
@@ -497,15 +501,29 @@ export default function App() {
                 Повторить
               </button>
             )}
-            {/* The free alternative — always available, always 0 ₽ (the server never calls a
-                model on this path; proven with a bomb on the model client). */}
-            <button type="button" onClick={runTextVerdict}>
-              Описать словами — бесплатно
+            {/* FIX 3: while a verdict is in flight the buttons are inert. This is a UI
+                safeguard against a garage double-tap — not a substitute for the server-side
+                n_verdict counter, which remains the authority. (handoff :1034 and deeper :1051
+                already disable on busy; these two did not.) */}
+            <button type="button" onClick={runTextVerdict} disabled={busy}>
+              {busy ? "Андрей думает…" : "Описать словами — бесплатно"}
             </button>
             {/* The paid alternative — a customer willing to pay must never be stranded either. */}
-            <button type="button" className="btn-pro" onClick={runProVerdict}>
-              Сессия с механиком · 150 ₽
+            <button type="button" className="btn-pro" onClick={runProVerdict} disabled={busy}>
+              {busy ? "Андрей думает…" : "Сессия с механиком · 150 ₽"}
             </button>
+            {/* The codes the relay now normalises (FIX 2) — shown only where they change the
+                advice. A lost/expired session says start over; a skipped step says what to do
+                first; a duplicate says the work is already done. */}
+            {errCode === "session_expired" && (
+              <div className="hint-line">Сессия не найдена или истекла — начните заново и снова определите велосипед.</div>
+            )}
+            {errCode === "stage_skipped" && (
+              <div className="hint-line">Сначала определите велосипед — по видео или вручную.</div>
+            )}
+            {errCode === "verdict_duplicate" && (
+              <div className="hint-line">Вердикт по этой сессии уже получен — результат выше, платить снова не нужно.</div>
+            )}
           </div>
         </div>
       )}
@@ -652,8 +670,12 @@ export default function App() {
           </div>
 
           <div className="card-unit">
-            <span className={`badge-tag ${passportFailed ? "badge-warn" : ""}`}>
-              {passportFailed ? "Модель нужна вручную" : "✓ Велосипед опознан"}
+            {/* FIX 1a: the badge is keyed to the SAME condition as the bubble. Before this fix
+                it showed «✓ Велосипед опознан» while the bubble said the model was unknown —
+                because it was keyed to passportFailed alone, which is false during the ~15 s
+                the background passport is still running and on every pre-tap render. */}
+            <span className={`badge-tag ${passport?.identity?.make ? "" : "badge-warn"}`}>
+              {passport?.identity?.make ? "✓ Велосипед опознан" : "Модель нужна вручную"}
             </span>
             <div style={{ fontSize: "18px", fontWeight: 700, margin: "4px 0" }}>
               {[passport?.identity?.make, passport?.identity?.model, passport?.identity?.year_window].filter(Boolean).join(" ") || model || "Ваш велосипед"}
