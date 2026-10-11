@@ -1,22 +1,22 @@
-// The app talks to the brain through its own route prefix. Default is "/andrey"
-// (the AI Studio build proxies it to ANDREY_BASE via Vite). A self-hosted build can
-// inject `window.__ANDREY_BASE__` to point at a same-origin relay (on hi5.bike that is
-// "/Andrey/relay" — see the deployment), so the SPA and the brain share an origin:
-// no CORS, no auth bridge, no token in the browser.
+import { ArCommitResponse, ArGuideResponse, CabinetResponse } from "./types/ar";
+import { mockArGuideResponse, mockCabinetResponse } from "./mock/arGuide";
+
 const BASE_OVERRIDE =
   (typeof window !== "undefined" && (window as any).__ANDREY_BASE__) || "";
 export const PROXY_BASE = BASE_OVERRIDE || "/andrey";
 
-// An error that keeps the HTTP status and the machine-readable `code` the relay now returns
-// (`upload_limit` / `rate_limit`). Without this the UI cannot tell "you hit the upload limit"
-// from "the analysis failed", which is why it used to offer a Retry that was doomed to fail.
 export class ApiError extends Error {
   status: number;
   code: string;
-  constructor(message: string, status: number, code: string) {
+  payUrl?: string;
+  feeRub?: number;
+
+  constructor(message: string, status: number, code: string, payUrl?: string, feeRub?: number) {
     super(message);
     this.status = status;
     this.code = code || "";
+    this.payUrl = payUrl;
+    this.feeRub = feeRub;
   }
 }
 
@@ -31,10 +31,18 @@ async function jsonFetch(url: string, init?: RequestInit) {
   }
   if (!res.ok) {
     const msg = (data && (data.detail || data.error)) || res.statusText || String(res.status);
-    throw new ApiError(msg, res.status, (data && data.code) || "");
+    throw new ApiError(
+      msg,
+      res.status,
+      (data && data.code) || "",
+      data && (data.pay_url || data.checkout_url),
+      data && data.fee_rub
+    );
   }
   return data;
 }
+
+const isMock = Boolean(import.meta.env.VITE_AR_MOCK === "true" || import.meta.env.VITE_AR_MOCK === "1");
 
 export const api = {
   proxyBase: PROXY_BASE,
@@ -100,4 +108,83 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+
+  // POST /api/ar/pay — ocStore checkout creation
+  arPay: async (sessionId: string): Promise<{ ok: boolean; pay_url: string; session_id: string }> => {
+    if (isMock) {
+      return {
+        ok: true,
+        pay_url: "https://hi5.bike/index.php?route=checkout/checkout&mock_paid=1",
+        session_id: sessionId,
+      };
+    }
+    return jsonFetch(`${PROXY_BASE}/api/ar/pay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+  },
+
+  // POST /api/ar/commit — S2 -> S3 transition (CAS, idempotent)
+  arCommit: async (body: { session_id?: string; use_credit?: boolean }): Promise<ArCommitResponse> => {
+    if (isMock) {
+      if (body.use_credit) {
+        return {
+          ok: true,
+          already: false,
+          stage: 3,
+          stage_name: "S3_AR",
+          fee_rub: 0,
+          paid_with: "credit",
+        };
+      }
+      return {
+        ok: true,
+        already: false,
+        stage: 3,
+        stage_name: "S3_AR",
+        fee_rub: 150,
+        paid_with: "yoomoney",
+      };
+    }
+    return jsonFetch(`${PROXY_BASE}/api/ar/commit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+
+  // GET /api/ar/guide — fetch ordered repair steps & overlay pins
+  arGuide: async (jobCodes = "", symptom = ""): Promise<ArGuideResponse> => {
+    if (isMock) {
+      return mockArGuideResponse;
+    }
+    const params = new URLSearchParams();
+    if (jobCodes) params.append("job_codes", jobCodes);
+    if (symptom) params.append("symptom", symptom);
+    const qs = params.toString();
+    return jsonFetch(`${PROXY_BASE}/api/ar/guide${qs ? `?${qs}` : ""}`);
+  },
+
+  // POST /api/media (or /api/deeper) — upload more media within the same session
+  arAddMedia: async (sessionId: string, files: File[]): Promise<ArGuideResponse> => {
+    if (isMock) {
+      return mockArGuideResponse;
+    }
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    fd.append("session_id", sessionId);
+    return jsonFetch(`${PROXY_BASE}/api/media`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+
+  // GET /api/cabinet — identity-required profile view
+  cabinet: async (): Promise<CabinetResponse> => {
+    if (isMock) {
+      return mockCabinetResponse;
+    }
+    return jsonFetch(`${PROXY_BASE}/api/cabinet`);
+  },
 };

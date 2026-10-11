@@ -650,3 +650,312 @@ body {
 }
 .orbit-shutter:active{transform:scale(.94)}
 .orbit-shutter svg{display:block}
+/* =========================================================================
+   ADDITIONS: AR Guide (S3), Offer Screen & Cabinet
+   Append-only to preserve existing design tokens & styling system.
+   ========================================================================= */
+
+.offer-flow-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.free-path-block {
+  border-left: 3px solid var(--brand);
+}
+
+.free-path-desc {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 6px 0 10px;
+}
+
+.free-steps-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.free-steps-list li {
+  margin-bottom: 4px;
+}
+
+.offer-box {
+  background: var(--brand-light);
+  border: 1.5px solid var(--brand);
+  position: relative;
+}
+
+.offer-highlight-pill {
+  position: absolute;
+  top: -10px;
+  right: 16px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.offer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.offer-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.offer-price {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--brand);
+}
+
+.offer-summary {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 14px;
+}
+
+.offer-email-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.offer-email-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.offer-email-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.checkout-redirect-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* AR Guide Screen & Overlay Styles */
+.ar-guide-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ar-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.cabinet-nav-btn {
+  background: var(--white);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(11, 37, 69, 0.05);
+}
+
+.ar-media-viewport-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ar-media-element {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.ar-media-fallback {
+  text-align: center;
+  padding: 32px 16px;
+  color: #fff;
+}
+
+.ar-overlay-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.ar-pin-landmark {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.ar-pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--brand);
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.7);
+}
+
+.ar-pin-label {
+  margin-top: 4px;
+  background: rgba(11, 37, 69, 0.88);
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ar-bbox-outline {
+  position: absolute;
+  border: 2px solid var(--brand);
+  background: rgba(0, 122, 255, 0.15);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.ar-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ar-step-card {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ar-step-card.is-current {
+  border-color: var(--brand);
+  background: var(--brand-light);
+}
+
+.ar-step-index {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.ar-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ar-step-instruction {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.ar-step-jobcode {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ar-followup-box {
+  background: #ffffff;
+  border: 1px dashed var(--line);
+  text-align: center;
+}
+
+/* Cabinet Screen */
+.cabinet-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cabinet-top-nav {
+  margin-bottom: 4px;
+}
+
+.credit-banner-card {
+  background: var(--brand-light);
+  border-color: var(--brand);
+}
+
+.credit-number-headline {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 6px 0 4px;
+}
+
+.credit-explain {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.cabinet-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cabinet-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.cabinet-item-row:last-child {
+  border-bottom: none;
+}
+

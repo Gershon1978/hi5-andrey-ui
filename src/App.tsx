@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "./api";
+import { ArGuideResponse } from "./types/ar";
+import { OfferScreen } from "./screens/OfferScreen";
+import { ArGuideScreen } from "./screens/ArGuideScreen";
+import { CabinetScreen } from "./screens/CabinetScreen";
 
 type AppState =
   | "INTRO"
@@ -10,7 +14,9 @@ type AppState =
   | "VERDICT"
   | "DEEPER"
   | "TICKET"
-  | "PARTS";
+  | "PARTS"
+  | "AR_GUIDE"
+  | "CABINET";
 
 const BLUEPRINT_LABELS: Record<string, string> = {
   bike: "Модель велосипеда",
@@ -72,11 +78,10 @@ function formatFileSize(bytes: number): string {
 
 export default function App() {
   const [state, setState] = useState<AppState>("INTRO");
-  // THE INTENT GATE: there is NO default. null = "not selected yet", and it can never
-  // render a result — the analysis states are unreachable until a pill is tapped.
+  const [previousState, setPreviousState] = useState<AppState>("VERDICT");
   const [userIntent, setUserIntent] = useState<"REPAIR" | "PARTS" | null>(null);
 
-  // User input metadata (ambient prompts)
+  // User input metadata
   const [model, setModel] = useState("");
   const [showModelInput, setShowModelInput] = useState(false);
   const [symptom, setSymptom] = useState("");
@@ -93,17 +98,17 @@ export default function App() {
   const [flowResult, setFlowResult] = useState<any>(null);
   const [ticket, setTicket] = useState<any>(null);
 
+  // AR Stage Results
+  const [arGuide, setArGuide] = useState<ArGuideResponse | null>(null);
+  const [paidWithCredit, setPaidWithCredit] = useState(false);
+  const [payUrl, setPayUrl] = useState<string | undefined>(undefined);
+
   // Status & long-running progress
   const [busy, setBusy] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [err, setErr] = useState<string | null>(null);
-  // The relay's machine-readable 429 code (`upload_limit` | `rate_limit` | ""). Without it the
-  // banner cannot tell a doomed Retry from a real analysis failure — see `noteError`.
   const [errCode, setErrCode] = useState<string>("");
-  // Passport extraction failed -> the typed-model bridge is now the primary path, not a link.
   const [passportFailed, setPassportFailed] = useState(false);
-  // Provenance of the verdict on screen: "video" (the normal funnel) or "text" (the free
-  // text-only fallback). The user must never be told we watched something we didn't.
   const [verdictSource, setVerdictSource] = useState<"video" | "text">("video");
   const [copied, setCopied] = useState(false);
 
@@ -112,13 +117,11 @@ export default function App() {
   const problemVideoInputRef = useRef<HTMLInputElement>(null);
   const deeperInputRef = useRef<HTMLInputElement>(null);
 
-  // Initial mount: check health and capture guidance
   useEffect(() => {
     api.health().catch(() => {});
     api.capture().catch(() => {});
   }, []);
 
-  // Timer for long-running calls
   useEffect(() => {
     let timer: any = null;
     if (busy) {
@@ -134,20 +137,12 @@ export default function App() {
     };
   }, [busy]);
 
-  // When the bike video is chosen: fire /api/passport in the background. THIS IS THE
-  // INTENTIONAL COARSE PASS — it is what makes "choose while I analyse" real, so it is
-  // allowed to run before the tap. But it MUST NOT render anything (the CHOICE render
-  // shows the ask + the two cards and nothing else), and it must never become the
-  // diagnosis: /api/flow and every price wait for the tapped intent.
   async function handleBikeVideoSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const file = filesList[0];
     setBikeVideo(file);
     setErr(null);
     setErrCode("");
-    // FIX 1b: a new attempt clears the failure flag FIRST. Until the attempt resolves, the
-    // screen must show neither the success badge nor the failure branch — both are claims
-    // about an answer we do not have yet.
     setPassportFailed(false);
     setState("CHOICE");
 
@@ -162,9 +157,6 @@ export default function App() {
         if (!model) setModel(fullModel);
       }
     } catch (e: any) {
-      // DO NOT strand the user: a failed identification is not a dead end. The typed-model
-      // bridge (`passport_from_model`) reaches the same S1 state without any video, so open
-      // the field instead of swallowing the error and rendering an empty "Я узнал твой байк".
       console.warn("Passport extraction fallback:", e);
       setPassportFailed(true);
       setShowModelInput(true);
@@ -173,12 +165,20 @@ export default function App() {
     }
   }
 
-  // One place that records WHY a call failed, so the banner can act on the code rather than
-  // on a Russian string. `code` comes from the relay's 429 payloads.
   function noteError(e: any) {
     const code = e instanceof ApiError ? e.code : "";
     setErrCode(code);
     setErr(e?.message || String(e));
+
+    // Spec B5: Refusal normalisation handling
+    if (e instanceof ApiError) {
+      if (e.status === 402 || e.code === "payment_required") {
+        setPayUrl(e.payUrl);
+        setState("VERDICT");
+      } else if (e.code === "stage_skipped") {
+        setState("VERDICT");
+      }
+    }
   }
 
   function clearErr() {
@@ -186,14 +186,8 @@ export default function App() {
     setErrCode("");
   }
 
-  // ── Reach S1 without a video ────────────────────────────────────────────────────────────
-  // /api/verdict requires the bike-identification stage. A user who can't upload (limit,
-  // no camera, dead connection) still gets there through the MODEL-ONLY passport: typed model
-  // -> KB lookup -> stage advanced. Proven on the server with the model client replaced by a
-  // bomb: 200, stage 0 -> 1, ZERO model calls, make='Scott'. It carries no file, so the relay
-  // spends none of the 12 accepted-upload slots either.
   async function ensureSession(): Promise<boolean> {
-    if (flowResult?.session_id) return true;         // already past S1
+    if (flowResult?.session_id) return true;
     const m = model.trim();
     if (!m) {
       setShowModelInput(true);
@@ -212,11 +206,6 @@ export default function App() {
     }
   }
 
-  // ── The FREE text-only fallback ─────────────────────────────────────────────────────────
-  // For a user who cannot upload (limit reached, no camera, dead connection) Andrey must still
-  // help: they type the bike and the symptom, and we answer from the deterministic ruleset.
-  // Proven on the server (2026-10-10, model client replaced by a bomb):
-  //   the model is NEVER called · no costed-verdict counter is consumed · spend unchanged.
   async function runTextVerdict() {
     const symptomText = symptom.trim();
     const modelText = model.trim();
@@ -234,7 +223,7 @@ export default function App() {
       const res = await api.verdict({
         symptom: symptomText || "Шум или люфт в узле",
         model: modelText,
-        use_model: false,      // the free, deterministic path — never the paid one
+        use_model: false,
       });
       setFlowResult({ verdict: res.verdict || res, session_id: res.session_id });
       setVerdictSource("text");
@@ -246,11 +235,6 @@ export default function App() {
     }
   }
 
-  // ── The PAID alternative: a PRO mechanic session ────────────────────────────────────────
-  // Always offered alongside the free path, because a paying customer who cannot upload must
-  // still be able to buy real help. This runs the full model diagnosis (use_model: true) and
-  // the resulting verdict card carries the server's price; checkout itself lands on the
-  // workshop handoff, which is still identity-gated until the shop-session bridge exists.
   async function runProVerdict() {
     const symptomText = symptom.trim() || "Шум или люфт в узле";
     const modelText = model.trim();
@@ -273,7 +257,6 @@ export default function App() {
     }
   }
 
-  // Handle choice selection. The ONLY caller is a pill tap — never a default, never a timer.
   function handleSelectIntent(intent: "REPAIR" | "PARTS") {
     setUserIntent(intent);
     if (intent === "PARTS") {
@@ -283,7 +266,6 @@ export default function App() {
     }
   }
 
-  // When problem video is chosen: immediately trigger /api/flow
   async function handleProblemVideoSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const file = filesList[0];
@@ -316,7 +298,6 @@ export default function App() {
     }
   }
 
-  // Retry problem video analysis
   async function retryProblemVideo() {
     if (!problemVideo) return;
     setErr(null);
@@ -340,7 +321,6 @@ export default function App() {
     }
   }
 
-  // Handle deeper clarifier upload
   async function handleDeeperSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const newFiles = Array.from(filesList);
@@ -375,18 +355,17 @@ export default function App() {
     }
   }
 
-  // Handoff to workshop
   async function handleHandoff() {
     setBusy(true);
     setErr(null);
     try {
-      const verdict = flowResult?.verdict;
+      const v = flowResult?.verdict;
       const t = await api.handoff({
         session_id: flowResult?.session_id,
         model: model || passport?.identity?.model || "",
         symptom: symptom || "Заявка из AI-диагностики",
-        paid_ar_credit_rub: verdict?.diy?.price_rub || 0,
-        ar_tier: verdict?.diy?.tier || 0,
+        paid_ar_credit_rub: v?.diy?.price_rub || 0,
+        ar_tier: v?.diy?.tier || 0,
       });
       setTicket(t.ticket || t);
       setState("TICKET");
@@ -397,11 +376,82 @@ export default function App() {
     }
   }
 
-  // Reset entire flow
+  // ── S3 Entry & Flow Handlers (Spec B2) ────────────────────────────────────────────────
+  async function handleStartAiRepair(optionalEmail?: string) {
+    setBusy(true);
+    clearErr();
+    const sid = flowResult?.session_id;
+
+    try {
+      // Step A: Attempt CAS advance with commit
+      const commitRes = await api.arCommit({ session_id: sid, use_credit: false });
+
+      if (commitRes.ok) {
+        setPaidWithCredit(commitRes.paid_with === "credit");
+        // Load AR guidance
+        const causes = flowResult?.verdict?.causes || [];
+        const jobCodes = causes.map((c: any) => c.job_code).filter(Boolean).join(",");
+        const guideData = await api.arGuide(jobCodes, symptom);
+        setArGuide(guideData);
+        setState("AR_GUIDE");
+        return;
+      }
+    } catch (e: any) {
+      if (e instanceof ApiError && (e.status === 402 || e.code === "payment_required")) {
+        // Spec B2: 402 -> Return to Offer with pay_url
+        if (e.payUrl) {
+          setPayUrl(e.payUrl);
+        } else {
+          // If pay_url was not attached, invoke A3 ocStore order creation
+          try {
+            const payRes = await api.arPay(sid || "active_session");
+            setPayUrl(payRes.pay_url);
+          } catch (payErr: any) {
+            noteError(payErr);
+          }
+        }
+        return;
+      }
+      noteError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStartNewWithCredit() {
+    setBusy(true);
+    clearErr();
+    try {
+      const commitRes = await api.arCommit({ session_id: flowResult?.session_id, use_credit: true });
+      if (commitRes.ok) {
+        setPaidWithCredit(true);
+        const guideData = await api.arGuide("", symptom);
+        setArGuide(guideData);
+        setState("AR_GUIDE");
+      }
+    } catch (e: any) {
+      noteError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUploadMoreMedia(files: File[]) {
+    setBusy(true);
+    clearErr();
+    try {
+      const sid = flowResult?.session_id || "active_session";
+      const updatedGuide = await api.arAddMedia(sid, files);
+      setArGuide(updatedGuide);
+    } catch (e: any) {
+      noteError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function handleReset() {
     setState("INTRO");
-    // THE INTENT GATE: a reset must clear the choice too — re-seeding it with "REPAIR"
-    // rebuilds the third state ("not selected yet" wearing a default) that we killed.
     setUserIntent(null);
     setModel("");
     setShowModelInput(false);
@@ -413,6 +463,9 @@ export default function App() {
     setPassport(null);
     setFlowResult(null);
     setTicket(null);
+    setArGuide(null);
+    setPayUrl(undefined);
+    setPaidWithCredit(false);
     setBusy(false);
     setErr(null);
     setErrCode("");
@@ -440,7 +493,6 @@ export default function App() {
     });
   }
 
-  // Rotating analysis messages
   function getAnalysisMessage() {
     if (elapsedSeconds < 15) return "Изучаем трансмиссию и геометрию…";
     if (elapsedSeconds < 30) return "Слушаем аудиодорожку…";
@@ -451,17 +503,10 @@ export default function App() {
   const verdict = flowResult?.verdict;
   const roundNo = verdict?.round_no ?? 0;
   const isCapReached = roundNo >= 2;
-  const bestCause = (verdict?.causes || [])
-    .slice()
-    .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))[0];
 
-  // Tags for passport preview
   const blueprintEntries = getNonEmptyObjectEntries(passport?.blueprint);
   const passportTags = blueprintEntries.slice(0, 3).map(([k, v]) => `${humanKey(k)}: ${v}`);
 
-  // The parts dock links to the REAL shop search: there is no parts-order endpoint in the
-  // contract and this screen carries no SKUs, so we search with the best query we have
-  // instead of faking a "request sent" state.
   const partsQuery =
     (Array.isArray(passport?.required_parts)
       ? passport.required_parts.find((p: any) => typeof p === "string" && p.trim())
@@ -472,7 +517,6 @@ export default function App() {
 
   return (
     <main className="canvas">
-      {/* Screen 0 mark: the avatar + online ring (the wheel motif). No title, no sub. */}
       <header className="app-header">
         <div className="avatar-wrap">
           <div className="avatar">А</div>
@@ -480,12 +524,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Recovery banner (Edge Case §5 + the 2026-10-10 "don't strand the user" pass).
-          Three different failures, three different answers:
-            upload_limit -> a Retry is GUARANTEED to fail (the same IP bucket), so we do not
-                            offer one; we offer the free text diagnosis instead.
-            rate_limit   -> a minute's pause really does clear it, so Retry stays.
-            anything else-> a genuine analysis failure: Retry is legitimate. */}
+      {/* Recovery Banner */}
       {err && (
         <div className={`error-banner ${errCode ? "is-limit" : ""}`}>
           <div>
@@ -493,6 +532,8 @@ export default function App() {
               ? "На этот час загрузки видео исчерпаны. Загрузки подождут — а помочь могу уже сейчас по описанию: опишите проблему словами."
               : errCode === "rate_limit"
               ? "Серверу нужно передохнуть. Через минуту попробуйте снова — или опишите проблему словами, я отвечу без видео."
+              : errCode === "payment_required"
+              ? "Для перехода к персональному гиду требуется оплата 150 ₽. Ссылка сформирована ниже."
               : "Что-то пошло не так при анализе. Файлы сохранены. Попробуем ещё раз?"}
           </div>
           <div className="banner-actions">
@@ -501,20 +542,13 @@ export default function App() {
                 Повторить
               </button>
             )}
-            {/* FIX 3: while a verdict is in flight the buttons are inert. This is a UI
-                safeguard against a garage double-tap — not a substitute for the server-side
-                n_verdict counter, which remains the authority. (handoff :1034 and deeper :1051
-                already disable on busy; these two did not.) */}
             <button type="button" onClick={runTextVerdict} disabled={busy}>
               {busy ? "Андрей думает…" : "Описать словами — бесплатно"}
             </button>
-            {/* The paid alternative — a customer willing to pay must never be stranded either. */}
             <button type="button" className="btn-pro" onClick={runProVerdict} disabled={busy}>
               {busy ? "Андрей думает…" : "Сессия с механиком · 150 ₽"}
             </button>
-            {/* The codes the relay now normalises (FIX 2) — shown only where they change the
-                advice. A lost/expired session says start over; a skipped step says what to do
-                first; a duplicate says the work is already done. */}
+
             {errCode === "session_expired" && (
               <div className="hint-line">Сессия не найдена или истекла — начните заново и снова определите велосипед.</div>
             )}
@@ -566,18 +600,14 @@ export default function App() {
         }}
       />
 
-      {/* =========================================================================
-          S0: INTRO
-          ========================================================================= */}
+      {/* S0: INTRO */}
       {state === "INTRO" && (
         <div className="speech-bubble">
           «Покажите велосипед: 10 секунд, без звука.»
         </div>
       )}
 
-      {/* =========================================================================
-          S2: CHOICE
-          ========================================================================= */}
+      {/* S2: CHOICE */}
       {state === "CHOICE" && (
         <>
           {bikeVideo && (
@@ -596,16 +626,10 @@ export default function App() {
             </div>
           )}
 
-          {/* THE ASK (the intent gate). Owner's ruling: the user MUST choose BEFORE we output
-              ANY result of this video — no identity, no spec, no fault, no price. It is asked
-              WHILE we analyse, so the decision overlaps our processing. */}
           <div className="speech-bubble">
             «Пока изучаю видео, чем помочь?»
           </div>
 
-          {/* dual_pill — Hub Choice (DualPill). Two 96px cards: a 56px round wash badge with a 32px
-              monoline glyph, the owner's frozen label, and the action as the sub-label. The tap IS
-              the commit — these two cards are the ONLY way out of this screen. */}
           <div className="choice-list">
             <button
               type="button"
@@ -614,7 +638,6 @@ export default function App() {
               onClick={() => handleSelectIntent("REPAIR")}
             >
               <span className="choice-card-badge">
-                {/* monoline combination spanner at 45° — open-end jaw + box ring */}
                 <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor"
                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -633,8 +656,6 @@ export default function App() {
               onClick={() => handleSelectIntent("PARTS")}
             >
               <span className="choice-card-badge">
-                {/* monoline cassette: a 3-sprocket stepped cluster (teeth + HG spline).
-                    stroke 2, not 2.5 — three concentric rings would fuse at 32 px. */}
                 <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor"
                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9.5" />
@@ -652,14 +673,9 @@ export default function App() {
         </>
       )}
 
-      {/* =========================================================================
-          S3: PASSPORT
-          ========================================================================= */}
+      {/* S3: PASSPORT */}
       {state === "PASSPORT" && (
         <>
-          {/* A passport without an identity is NOT an identification. Before this pass the
-              screen said «Я узнал твой байк: Велосипед» when extraction failed — a confident
-              claim about nothing, which is exactly the lie that kills trust. */}
           <div className="speech-bubble">
             {passportFailed || !passport?.identity?.make
               ? "«Модель по видео определить не удалось — бывает. Напишите её, и я продолжу:»"
@@ -670,10 +686,6 @@ export default function App() {
           </div>
 
           <div className="card-unit">
-            {/* FIX 1a: the badge is keyed to the SAME condition as the bubble. Before this fix
-                it showed «✓ Велосипед опознан» while the bubble said the model was unknown —
-                because it was keyed to passportFailed alone, which is false during the ~15 s
-                the background passport is still running and on every pre-tap render. */}
             <span className={`badge-tag ${passport?.identity?.make ? "" : "badge-warn"}`}>
               {passport?.identity?.make ? "✓ Велосипед опознан" : "Модель нужна вручную"}
             </span>
@@ -710,7 +722,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Ambient Prompt: Symptom text */}
           {!showSymptomInput ? (
             <button
               type="button"
@@ -730,14 +741,9 @@ export default function App() {
             </div>
           )}
 
-          {/* The PAID alternative, kept as a micro-link so it never competes with the primary
-              action (one control at a time, P3). A customer who would rather pay than film
-              must always have that door open. */}
           <button type="button" className="micro-link" onClick={runProVerdict}>
             Сразу к механику · платная сессия 150 ₽
           </button>
-          {/* The FREE text alternative next to it: no camera, no video — still a diagnosis.
-              Only shown once a model is present, because /api/verdict needs S1. */}
           {model.trim() && (
             <button type="button" className="micro-link" onClick={runTextVerdict}>
               Описать проблему словами — бесплатно
@@ -746,9 +752,7 @@ export default function App() {
         </>
       )}
 
-      {/* =========================================================================
-          S4: ANALYZING
-          ========================================================================= */}
+      {/* S4: ANALYZING */}
       {state === "ANALYZING" && (
         <>
           {passport && (
@@ -766,81 +770,47 @@ export default function App() {
         </>
       )}
 
-      {/* =========================================================================
-          S5: VERDICT_FORK
-          ========================================================================= */}
-      {/* =========================================================================
-          S5: VERDICT — GATE-AWARE. Above the gate (>= 80 %) the server sends a real
-          `diy` and `workshop`; the fork renders. BELOW the gate it sends null for both,
-          and we must not invent a promise to fill the gap (SPEC.md: no prices below the
-          gate; the review that flagged this was right about the fallbacks).
-          ========================================================================= */}
+      {/* S5: VERDICT -> OfferScreen (Spec B1 / B2: Free content -> Free repair path -> 150 ₽ offer) */}
       {state === "VERDICT" && verdict && (
-        <>
-          <div className="speech-bubble">
-            {verdictSource === "text"
-              ? "«Это предварительный вывод по вашему описанию — видео я не смотрел.»"
-              : verdict.gate === "verdict"
-              ? "«Вот что удалось определить по звуку и механике:»"
-              : "«Звук неоднозначный. Вот что видно — точного вывода нет:»"}
-          </div>
-
-          {/* The 2-round cap was reached while still below the gate -> say it plainly. */}
-          {isCapReached && verdict.gate !== "verdict" && (
-            <div className="badge-tag badge-warn" style={{ display: "block", textAlign: "center", padding: "8px 12px" }}>
-              Достигнут лимит уточнений, уверенность ниже 80% — цен и рекомендаций по ремонту не даём.
-              Осмотр в мастерской покажет точнее.
-            </div>
-          )}
-
-          {/* Causes — always shown; each carries its own confidence, so it never over-claims. */}
-          <div className="card-unit">
-            <div className="card-title">Вероятные причины</div>
-            <div className="causes-list">
-              {verdict.causes?.map((c: any, i: number) => (
-                <div key={i} className="cause-item">
-                  <span className="cause-label">{c.label}</span>
-                  <span className="cause-conf">{formatConfidence(c.confidence)}%</span>
-                </div>
-              ))}
-            </div>
-
-            {/* The DIY / workshop fork exists ONLY above the gate. */}
-            {verdict.gate === "verdict" && (
-              <>
-                <div className="fork-grid">
-                  <div className="fork-card">
-                    <h4>Сделать самому</h4>
-                    <p>{verdict.diy?.label || ""}</p>
-                    {verdict.diy?.price_text && (
-                      <div className="fork-price">{verdict.diy.price_text}</div>
-                    )}
-                    {typeof verdict.diy?.price_rub === "number" && !verdict.diy?.price_text && (
-                      <div className="fork-price">{verdict.diy.price_rub} ₽</div>
-                    )}
-                  </div>
-
-                  <div className="fork-card">
-                    <h4>В мастерской hi5.bike</h4>
-                    <p>{verdict.workshop?.detail || ""}</p>
-                    {verdict.workshop?.price_text && (
-                      <div className="fork-price">{verdict.workshop.price_text}</div>
-                    )}
-                  </div>
-                </div>
-
-                {verdict.guarantee && (
-                  <div className="guarantee-note">{verdict.guarantee}</div>
-                )}
-              </>
-            )}
-          </div>
-        </>
+        <OfferScreen
+          passport={passport}
+          verdict={verdict}
+          verdictSource={verdictSource}
+          isCapReached={isCapReached}
+          onSelectAiRepair={handleStartAiRepair}
+          onHandoffWorkshop={handleHandoff}
+          busy={busy}
+          payUrl={payUrl}
+          errorMessage={err}
+        />
       )}
 
-      {/* =========================================================================
-          DEEPER: Clarifier photo asks (No prices!)
-          ========================================================================= */}
+      {/* S3 Paid DIY Guide Screen (Spec B3) */}
+      {state === "AR_GUIDE" && arGuide && (
+        <ArGuideScreen
+          guideResponse={arGuide}
+          mediaFile={problemVideo || bikeVideo}
+          paidWithCredit={paidWithCredit}
+          onUploadMoreMedia={handleUploadMoreMedia}
+          onFinishJob={() => setState("TICKET")}
+          onOpenCabinet={() => {
+            setPreviousState("AR_GUIDE");
+            setState("CABINET");
+          }}
+          busy={busy}
+        />
+      )}
+
+      {/* Cabinet Screen (Spec B4) */}
+      {state === "CABINET" && (
+        <CabinetScreen
+          onBackToCurrent={() => setState(previousState)}
+          onStartNewWithCredit={handleStartNewWithCredit}
+          busy={busy}
+        />
+      )}
+
+      {/* DEEPER */}
       {state === "DEEPER" && verdict && (
         <>
           <div className="speech-bubble">
@@ -858,9 +828,7 @@ export default function App() {
         </>
       )}
 
-      {/* =========================================================================
-          TICKET: Handoff confirmation
-          ========================================================================= */}
+      {/* TICKET */}
       {state === "TICKET" && ticket && (
         <>
           <div className="speech-bubble">
@@ -933,9 +901,7 @@ export default function App() {
         </>
       )}
 
-      {/* =========================================================================
-          PARTS: Specifications & parts search (no fake data)
-          ========================================================================= */}
+      {/* PARTS */}
       {state === "PARTS" && (
         <>
           <div className="speech-bubble">
@@ -984,133 +950,102 @@ export default function App() {
         </>
       )}
 
-      {/* =========================================================================
-          MORPHING ACTION UNIT (Persistent at Bottom)
-          ========================================================================= */}
-      <footer className="action-dock">
-        <div className="action-dock-inner">
-          {/* Screen 0: the ORBIT SHUTTER — the ONLY control. Opens the native camera. */}
-          {state === "INTRO" && (
-            <button
-              type="button"
-              className="orbit-shutter"
-              aria-label="Показать велосипед"
-              onClick={() => bikeVideoInputRef.current?.click()}
-            >
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor"
-                   strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
-                <path d="M6.7 6.7l2.1 2.1M15.2 15.2l2.1 2.1M17.3 6.7l-2.1 2.1M8.8 15.2l-2.1 2.1" />
-              </svg>
-            </button>
-          )}
-
-          {/* CHOICE = the parked receipt. The two pills ARE the only control:
-              no "Продолжить", no default — the gate holds until an intent is tapped. */}
-          {state === "CHOICE" && passportLoading && (
-            <div className="progress-gauge">
-              <div className="progress-title">Изучаю геометрию и трансмиссию…</div>
-              <div className="progress-message">Выберите направление выше</div>
-            </div>
-          )}
-
-          {/* PASSPORT state */}
-          {state === "PASSPORT" && (
-            <>
+      {/* Bottom Dock */}
+      {state !== "AR_GUIDE" && state !== "CABINET" && state !== "VERDICT" && (
+        <footer className="action-dock">
+          <div className="action-dock-inner">
+            {state === "INTRO" && (
               <button
                 type="button"
-                className="btn-pill"
-                onClick={() => problemVideoInputRef.current?.click()}
+                className="orbit-shutter"
+                aria-label="Показать велосипед"
+                onClick={() => bikeVideoInputRef.current?.click()}
               >
-                🎥 Снять видео поломки
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor"
+                     strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+                  <path d="M6.7 6.7l2.1 2.1M15.2 15.2l2.1 2.1M17.3 6.7l-2.1 2.1M8.8 15.2l-2.1 2.1" />
+                </svg>
               </button>
-              <div className="dock-caption">
-                Снимите 10 сек. со звуком: покрутите педали, пощелкайте переключателем или покажите место люфта.
-              </div>
-            </>
-          )}
+            )}
 
-          {/* ANALYZING state */}
-          {state === "ANALYZING" && (
-            <div className="progress-gauge">
-              <div className="progress-title">
-                Андрей слушает и анализирует… ({elapsedSeconds} с)
+            {state === "CHOICE" && passportLoading && (
+              <div className="progress-gauge">
+                <div className="progress-title">Изучаю геометрию и трансмиссию…</div>
+                <div className="progress-message">Выберите направление выше</div>
               </div>
-              <div className="progress-message">
-                {getAnalysisMessage()}
-              </div>
-              <div className="progress-note">
-                Это занимает около 30–45 секунд. Не закрывайте экран.
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* VERDICT state. The workshop route is honest in BOTH cases: above the gate it
-              sits beside the fork; below it, booking is the whole answer (no prices). */}
-          {state === "VERDICT" && (
-            <button
-              type="button"
-              className="btn-pill"
-              onClick={handleHandoff}
-              disabled={busy}
-            >
-              {busy
-                ? "Оформляем заявку…"
-                : verdict?.gate === "verdict"
-                  ? "Передать заявку в hi5.bike"
-                  : "Записаться в мастерскую"}
-            </button>
-          )}
+            {state === "PASSPORT" && (
+              <>
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => problemVideoInputRef.current?.click()}
+                >
+                  🎥 Снять видео поломки
+                </button>
+                <div className="dock-caption">
+                  Снимите 10 сек. со звуком: покрутите педали, пощелкайте переключателем или покажите место люфта.
+                </div>
+              </>
+            )}
 
-          {/* DEEPER state */}
-          {state === "DEEPER" && (
-            <>
+            {state === "ANALYZING" && (
+              <div className="progress-gauge">
+                <div className="progress-title">
+                  Андрей слушает и анализирует… ({elapsedSeconds} с)
+                </div>
+                <div className="progress-message">{getAnalysisMessage()}</div>
+                <div className="progress-note">
+                  Это занимает около 30–45 секунд. Не закрывайте экран.
+                </div>
+              </div>
+            )}
+
+            {state === "DEEPER" && (
+              <>
+                <button
+                  type="button"
+                  className="btn-pill"
+                  onClick={() => deeperInputRef.current?.click()}
+                  disabled={busy}
+                >
+                  {busy ? "Андрей изучает фото…" : "📷 Загрузить фото узла"}
+                </button>
+                <div className="dock-caption">1–2 четких фото узла крупным планом</div>
+              </>
+            )}
+
+            {state === "TICKET" && (
               <button
                 type="button"
-                className="btn-pill"
-                onClick={() => deeperInputRef.current?.click()}
-                disabled={busy}
+                className="btn-pill secondary"
+                onClick={handleReset}
               >
-                {busy ? "Андрей изучает фото…" : "📷 Загрузить фото узла"}
+                ↻ Начать заново
               </button>
-              <div className="dock-caption">
-                1–2 четких фото узла крупным планом
-              </div>
-            </>
-          )}
+            )}
 
-          {/* TICKET state */}
-          {state === "TICKET" && (
-            <button
-              type="button"
-              className="btn-pill secondary"
-              onClick={handleReset}
-            >
-              ↻ Начать заново
-            </button>
-          )}
-
-          {/* PARTS state. HONEST ACTION: the contract has no parts-order endpoint and this
-              screen carries no SKUs, so we do NOT fake a "request sent" success state —
-              the button opens the real shop search instead. */}
-          {state === "PARTS" && (
-            <>
-              <a
-                className="btn-pill"
-                href={`https://hi5.bike/index.php?route=product/search&search=${encodeURIComponent(partsQuery)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Показать запчасти на hi5.bike
-              </a>
-              <div className="dock-caption">
-                Откроется поиск в магазине hi5.bike — наличие и заказ оформляются там
-              </div>
-            </>
-          )}
-        </div>
-      </footer>
+            {state === "PARTS" && (
+              <>
+                <a
+                  className="btn-pill"
+                  href={`https://hi5.bike/index.php?route=product/search&search=${encodeURIComponent(partsQuery)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Показать запчасти на hi5.bike
+                </a>
+                <div className="dock-caption">
+                  Откроется поиск в магазине hi5.bike — наличие и заказ оформляются там
+                </div>
+              </>
+            )}
+          </div>
+        </footer>
+      )}
     </main>
   );
 }
