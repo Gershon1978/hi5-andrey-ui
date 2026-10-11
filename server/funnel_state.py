@@ -42,8 +42,8 @@ COOKIE_PATH = "/Andrey"      # nginx strips /Andrey before the app, so this must
 TTL = 1800.0                 # 30 min, sliding on every valid call
 LEASE_MAX = 240.0            # an expensive call may hold a session for at most this long
 
-S0, S1, S2 = 0, 1, 2
-STAGE_NAME = {S0: "S0_NEW", S1: "S1_BIKE_SEEN", S2: "S2_VERDICT"}
+S0, S1, S2, S3 = 0, 1, 2, 3
+STAGE_NAME = {S0: "S0_NEW", S1: "S1_BIKE_SEEN", S2: "S2_VERDICT", S3: "S3_AR"}
 
 # Per-session hard caps on paid operations (in addition to the global brake).
 MAX_VERDICT = 1              # a costed /api/verdict call, once per session

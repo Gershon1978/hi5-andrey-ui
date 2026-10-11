@@ -58,18 +58,31 @@ Russian (ru). Keep server-supplied strings verbatim (prices, job names, causes).
 | POST | `/api/deeper` | multipart `files[]`, `symptom`, `model`, `round_no` |
 | POST | `/api/handoff` | json `{session_id, model, symptom, paid_ar_credit_rub, ar_tier}` |
 
-## AR stage (S3) — the paid DIY guide  (LOCKED 2026-10-11)
+## AR stage (S3) — the paid DIY guide  (**LIVE** — verified 2026-10-11)
+
 After the verdict, a user who chooses **DIY** pays the **flat 150 ₽** and enters **S3 (AR
 guidance)**. The funnel stage machine is `S0 → S1 → S2 → S3`, monotonic and server-enforced:
 - `S0` new session · `S1` bike seen · `S2` verdict · **`S3` AR guidance (paid)**.
 - A request to an AR endpoint at a lower stage is refused `409` with `code=stage_skipped`.
 
-### AR endpoint (planned — lock this contract; backend not yet live)
+### AR endpoints (LIVE)
+
 | method | path | body | gate |
 |---|---|---|---|
+| POST | `/api/ar/commit` | json `{session_id, use_credit}` | **S2** (advances S2 → S3) |
 | GET | `/api/ar/guide` | — | **S3** |
 
-Returns the ordered repair steps + the pin coordinates for the overlay:
+`POST /api/ar/commit` is idempotent **by construction**: the transition is a compare-and-set, so
+a replay cannot advance twice or charge twice; a session already at S3 answers `200` with
+`already: true`.
+
+```jsonc
+{ "ok": true, "already": false, "stage": 3, "fee_rub": 150, "paid_with": "yoomoney" }
+{ "ok": true, "already": false, "stage": 3, "fee_rub": 0,   "paid_with": "credit" }
+{ "ok": false, "code": "payment_required", "fee_rub": 150, "pay_url": "…" }   // HTTP 402
+```
+
+`GET /api/ar/guide` returns the ordered repair steps + the pin coordinates for the overlay:
 ```json
 {
   "ok": true,
@@ -80,9 +93,14 @@ Returns the ordered repair steps + the pin coordinates for the overlay:
        "bbox": {"x": 0.38, "y": 0.66, "w": 0.08, "h": 0.10}}
     ],
     "frame_aspect": 1.7778
-  }
+  },
+  "unsupported_or_workshop": false
 }
 ```
+⚠️ **`pins` is always `[]` today.** A pin is only honest on a canonical still we control and
+none exist yet, so the text-only turn is the designed fallback — the overlay must render nothing
+rather than look broken. When no job code matches, the server answers
+`unsupported_or_workshop: true`, `steps: []`, plus real booking options.
 
 ### Coordinate schema (LOCKED)
 - **Normalized, not pixels**: `x`/`y`/`w`/`h` are fractions of the frame (0.0–1.0), so the
@@ -91,6 +109,16 @@ Returns the ordered repair steps + the pin coordinates for the overlay:
 - `frame_aspect` = source width / height, so the client can letterbox correctly.
 
 ### Pricing (LOCKED)
-- AR **is** the flat **150 ₽** DIY guide — no separate charge. The server meters AR calls under
-  the existing `expensive` reservation and the global 24 h spend brake (already live).
+- AR **is** the flat **150 ₽** DIY guide — no separate charge, no tiers, no discounts. The server
+  meters AR calls under the existing `expensive` reservation and the global 24 h spend brake
+  (both already live).
+- **There are no tokens and no balance** (owner ruling 2026-10-11). One product: **AI-ремонт =
+  1 ремонт = 150 ₽**. No VAT.
+- **Repair credit:** if the customer buys a part, they get **one free AI-repair** back, spendable
+  on a **new** job started from their cabinet (`use_credit: true` on `ar/commit`).
+- **Current live state (verified 2026-10-12):** the fee is **waived** — `_AR_FEE_RUB = 0` in
+  `web/passport_api.py` — because the paid step is not built yet. `fee_rub` is *reported* from that
+  one constant and never invented. So build the UI against the flat **150 ₽** and let the server
+  report the number; never hardcode a fee of `0`.
+
 
