@@ -1,5 +1,16 @@
 import { ArCommitResponse, ArGuideResponse, CabinetResponse } from "./types/ar";
 import { mockArGuideResponse, mockCabinetResponse } from "./mock/arGuide";
+// Offline fixtures for the funnel steps the AR mock does not cover, so that
+// VITE_AR_MOCK=true never reaches PROXY_BASE (which proxies to production).
+import {
+  OFFLINE_CAPTURE,
+  OFFLINE_DEEPER,
+  OFFLINE_FLOW,
+  OFFLINE_HANDOFF,
+  OFFLINE_HEALTH,
+  OFFLINE_PASSPORT,
+  OFFLINE_VERDICT,
+} from "./mock/offline";
 
 const BASE_OVERRIDE =
   (typeof window !== "undefined" && (window as any).__ANDREY_BASE__) || "";
@@ -48,10 +59,10 @@ export const api = {
   proxyBase: PROXY_BASE,
 
   // GET /api/health — backend connectivity check.
-  health: () => jsonFetch(`${PROXY_BASE}/api/health`),
+  health: () => (isMock ? Promise.resolve(OFFLINE_HEALTH) : jsonFetch(`${PROXY_BASE}/api/health`)),
 
   // GET /api/capture — the filming contract (how to shoot the clip).
-  capture: () => jsonFetch(`${PROXY_BASE}/api/capture`),
+  capture: () => (isMock ? Promise.resolve(OFFLINE_CAPTURE) : jsonFetch(`${PROXY_BASE}/api/capture`)),
 
   // GET /api/blueprint — canonical specs for a model.
   blueprint: (model: string, useWeb = true) =>
@@ -61,6 +72,7 @@ export const api = {
 
   // POST /api/verdict — diagnose from a symptom (no media).
   verdict: (body: { symptom?: string; model?: string; use_model?: boolean }) =>
+    isMock ? Promise.resolve(OFFLINE_VERDICT) :
     jsonFetch(`${PROXY_BASE}/api/verdict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,6 +81,7 @@ export const api = {
 
   // POST /api/flow — the whole pipeline in one call: passport + verdict + audio + ticket.
   flow: (files: File[], symptom: string, model: string) => {
+    if (isMock) return Promise.resolve(OFFLINE_FLOW);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
     fd.append("symptom", symptom);
@@ -78,6 +91,7 @@ export const api = {
 
   // POST /api/deeper — clarifier round when the verdict gate is "deeper".
   deeper: (files: File[], symptom: string, model: string, roundNo = 1) => {
+    if (isMock) return Promise.resolve(OFFLINE_DEEPER);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
     fd.append("symptom", symptom);
@@ -88,6 +102,7 @@ export const api = {
 
   // POST /api/passport — passport extraction from media.
   passport: (files: File[], model = "", useWeb = true) => {
+    if (isMock) return Promise.resolve(OFFLINE_PASSPORT);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
     fd.append("model", model);
@@ -103,6 +118,7 @@ export const api = {
     paid_ar_credit_rub?: number;
     ar_tier?: number;
   }) =>
+    isMock ? Promise.resolve(OFFLINE_HANDOFF) :
     jsonFetch(`${PROXY_BASE}/api/handoff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

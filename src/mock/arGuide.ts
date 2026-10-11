@@ -6,23 +6,23 @@ export const mockArGuideResponse: ArGuideResponse = {
     steps: [
       {
         index: 1,
-        instruction: "Переключите цепь на самую маленькую звезду сзади и ослабьте натяжение троса.",
-        job_code: "derailleur_h_limit",
+        instruction: "Снимите колесо, отжав эксцентрик или выкрутив ось, чтобы открыть доступ к суппорту.",
+        job_code: "s10_pads",
       },
       {
         index: 2,
-        instruction: "Вращайте винт H-limit по часовой стрелке, пока верхний ролик переключателя не встанет строго под внешней гранью малой звезды.",
-        job_code: "derailleur_h_limit",
+        instruction: "Разогните и извлеките шплинт, фиксирующий колодки в тормозном калипере.",
+        job_code: "s10_pads",
       },
       {
         index: 3,
-        instruction: "Подтяните трос пальцами без провисания и затяните фиксирующий болт с усилием 5 Н·м.",
-        job_code: "derailleur_cable_tension",
+        instruction: "Извлеките старые колодки вместе с распорной пружиной. Проверьте диск на наличие масла.",
+        job_code: "s10_pads",
       },
       {
         index: 4,
-        instruction: "Прокрутите педали и проверьте четкость заброса цепи на вторую и третью звезды.",
-        job_code: "derailleur_cable_tension",
+        instruction: "Установите новые колодки с пружиной, вставьте шплинт и загните усик.",
+        job_code: "s10_pads",
       },
     ],
     pins: [], // Locked spec: pins is [] today in production. text-only turn is designed fallback.
@@ -31,24 +31,18 @@ export const mockArGuideResponse: ArGuideResponse = {
   unsupported_or_workshop: false,
   scope: [
     {
-      code: "derailleur_h_limit",
-      name: "Настройка упора высоких передач H-limit",
-      minutes: "10 мин",
-      price_text: "150 ₽",
-    },
-    {
-      code: "derailleur_cable_tension",
-      name: "Натяжение и фиксация троса переключателя",
-      minutes: "10 мин",
-      price_text: "150 ₽",
+      code: "s10_pads",
+      name: "Замена колодок (пара, ободные или дисковые)",
+      minutes: "15–20 мин",
+      price_text: "600 – 1 000 ₽",
     },
   ],
   workshop: [
     {
-      code: "tune_rear_derailleur",
-      name: "Комплексная настройка заднего переключателя в цехе",
-      minutes: "20 мин",
-      price_text: "600–900 ₽",
+      code: "s10_pads",
+      name: "Замена колодок мастером в сервисе",
+      minutes: "15–20 мин",
+      price_text: "600 ₽",
     },
   ],
   tier: 1,
