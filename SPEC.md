@@ -57,3 +57,40 @@ Russian (ru). Keep server-supplied strings verbatim (prices, job names, causes).
 | POST | `/api/verdict` | json `{symptom, model, use_model}` |
 | POST | `/api/deeper` | multipart `files[]`, `symptom`, `model`, `round_no` |
 | POST | `/api/handoff` | json `{session_id, model, symptom, paid_ar_credit_rub, ar_tier}` |
+
+## AR stage (S3) — the paid DIY guide  (LOCKED 2026-10-11)
+After the verdict, a user who chooses **DIY** pays the **flat 150 ₽** and enters **S3 (AR
+guidance)**. The funnel stage machine is `S0 → S1 → S2 → S3`, monotonic and server-enforced:
+- `S0` new session · `S1` bike seen · `S2` verdict · **`S3` AR guidance (paid)**.
+- A request to an AR endpoint at a lower stage is refused `409` with `code=stage_skipped`.
+
+### AR endpoint (planned — lock this contract; backend not yet live)
+| method | path | body | gate |
+|---|---|---|---|
+| GET | `/api/ar/guide` | — | **S3** |
+
+Returns the ordered repair steps + the pin coordinates for the overlay:
+```json
+{
+  "ok": true,
+  "guide": {
+    "steps": [{"index": 1, "instruction": "Открутите винт H-limit…", "job_code": "derailleur_h_limit"}],
+    "pins": [
+      {"id": "h_limit", "x": 0.42, "y": 0.71, "label": "винт H-limit",
+       "bbox": {"x": 0.38, "y": 0.66, "w": 0.08, "h": 0.10}}
+    ],
+    "frame_aspect": 1.7778
+  }
+}
+```
+
+### Coordinate schema (LOCKED)
+- **Normalized, not pixels**: `x`/`y`/`w`/`h` are fractions of the frame (0.0–1.0), so the
+  overlay survives any resolution/device. Map normalized → CSS px with the rendered frame size.
+- `pins[].bbox` is optional (bounding box); `pins[].x/y` is the landmark **centroid**.
+- `frame_aspect` = source width / height, so the client can letterbox correctly.
+
+### Pricing (LOCKED)
+- AR **is** the flat **150 ₽** DIY guide — no separate charge. The server meters AR calls under
+  the existing `expensive` reservation and the global 24 h spend brake (already live).
+
