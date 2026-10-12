@@ -96,7 +96,7 @@ export const MOCK_CABINET_PAYLOAD: CabinetPayload = {
     {
       job_id: 501,
       created_at: "2026-10-10T14:20:00Z",
-      status: "processing",
+      status: "in_progress", // mirrors hist-01: the detail view must not contradict its history row
       bike_id: 101,
       symptom: "Проскакивает цепь на 7-й передаче под нагрузкой в подъем",
       causes: [
@@ -199,7 +199,7 @@ export const MOCK_CABINET_PAYLOAD: CabinetPayload = {
     {
       job_id: 480,
       created_at: "2026-08-30T10:15:00Z",
-      status: "delivered",
+      status: "done", // mirrors hist-06: a repair is «Завершён», never «Доставлено»
       bike_id: 101,
       symptom: "Периодический сброс цепи на кочках",
       causes: [

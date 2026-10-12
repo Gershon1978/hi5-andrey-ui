@@ -18,8 +18,8 @@ drives a real browser over CDP (`http://127.0.0.1:9222`), so a Chrome with
 remote debugging must be running. It writes `tests/accept_report.txt` and also
 prints the report.
 
-Result on 2026-10-12: **19/21 passed**, 2 failures — both the same defect class
-(see below). T20 was added after that run, so the suite now carries 22 checks.
+Result on 2026-10-12: **22/22 passed** — green after Round 9.6 fixed the two
+failures that the first run of this suite exposed (see "Fixed" below).
 
 ## What it asserts
 
@@ -48,21 +48,22 @@ Result on 2026-10-12: **19/21 passed**, 2 failures — both the same defect clas
 | T18 | no console errors |
 | T19 | `?mock=1` short-circuits the cabinet + AR data calls |
 
-## Known failures (as of 2026-10-12)
+## Fixed 2026-10-12 (Round 9.6)
 
-**T12b/T12c — `src/mock/cabinet.ts` `tickets[].status` was not updated in
-Round 9.5.** History rows now say `in_progress` → «В работе» / `done` →
-«Завершён», but the ticket objects still carry the store statuses `processing` /
-`delivered`, which the ticket-detail header renders (CabinetScreen: block A
-badge). So one bicycle repair shows two different statuses:
+**T12b/T12c — `src/mock/cabinet.ts` `tickets[].status`.** Round 9.5 updated the
+history rows to `in_progress` / `done` but left the ticket objects carrying the
+store statuses `processing` / `delivered`, which the ticket-detail header renders
+(CabinetScreen: block A badge). One bicycle repair therefore showed two different
+statuses:
 
-| job | history row | ticket header |
-|-----|-------------|---------------|
-| 501 (2026-10-10) | В работе | **В обработке** |
-| 480 (2026-08-30) | Завершён | **Доставлено** |
+| job | history row | ticket header before | ticket header now |
+|-----|-------------|----------------------|-------------------|
+| 501 (2026-10-10) | В работе | **В обработке** | В работе |
+| 480 (2026-08-30) | Завершён | **Доставлено** | Завершён |
 
-`delivered` on a repair is store-fulfilment vocabulary on a repair — the same
-class of bug Round 9.5 fixed for the table rows.
+`delivered` on a repair was store-fulfilment vocabulary on a repair — the same
+class of bug Round 9.5 fixed for the table rows. Second run after the fix:
+**22/22 passed**.
 
 ## Notes / non-failures
 
