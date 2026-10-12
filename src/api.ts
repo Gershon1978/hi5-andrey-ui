@@ -127,7 +127,7 @@ export const api = {
 
   // POST /api/ar/pay — hand off to ocStore order checkout (Spec A3 / B2)
   arPay: async (body: { session_id?: string; email?: string }): Promise<ArPayResponse> => {
-    if (import.meta.env.VITE_AR_MOCK === "true") {
+    if (isMock) {
       return { ok: true, order_id: 9999, pay_url: "https://hi5.bike/index.php?route=checkout/checkout" };
     }
     return jsonFetch(`${PROXY_BASE}/api/ar/pay`, {
@@ -139,7 +139,7 @@ export const api = {
 
   // POST /api/ar/commit — S2 -> S3 transition with payment/credit check (Spec A2 / B2)
   arCommit: async (body: { session_id?: string; use_credit?: boolean }): Promise<ArCommitResponse> => {
-    if (import.meta.env.VITE_AR_MOCK === "true") {
+    if (isMock) {
       return {
         ok: true,
         stage: 3,
@@ -157,7 +157,7 @@ export const api = {
 
   // GET /api/ar/guide — fetch AR guide with steps and pins (Spec B3)
   arGuide: async (jobCodes = "", symptom = ""): Promise<ArGuideResponse> => {
-    if (import.meta.env.VITE_AR_MOCK === "true") {
+    if (isMock) {
       return MOCK_GUIDE_RESPONSE;
     }
     const q = new URLSearchParams();
