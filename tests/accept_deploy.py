@@ -6,7 +6,7 @@ react-dom only, no `test` script), so these tests are black-box: they drive the
 real deployment over CDP and assert user-visible behaviour and the locked
 design/money laws.  Re-runnable after every round.
 
-Usage: python _accept_deploy.py [extra-query]
+Usage: python tests/accept_deploy.py [deployment-url]
 """
 import asyncio
 import os
@@ -222,6 +222,10 @@ async def main():
         rows = await page.evaluate(JS_ROWS)
         all_count = len(rows)
         chk("T09 history has data rows", all_count > 0, "rows=%d" % all_count)
+
+        titles = await page.evaluate(JS_TITLES)
+        chk("T20 repairs section renders its card title",
+            any("Единая история активности" in t for t in titles), titles)
 
         # T10/T11 — the money law and the repair lifecycle
         rep = [r for r in rows if r["kind"] == "Ремонт"]

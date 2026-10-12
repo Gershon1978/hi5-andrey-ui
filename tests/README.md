@@ -19,7 +19,7 @@ remote debugging must be running. It writes `tests/accept_report.txt` and also
 prints the report.
 
 Result on 2026-10-12: **19/21 passed**, 2 failures — both the same defect class
-(see below).
+(see below). T20 was added after that run, so the suite now carries 22 checks.
 
 ## What it asserts
 
@@ -34,6 +34,7 @@ Result on 2026-10-12: **19/21 passed**, 2 failures — both the same defect clas
 | T07 | free-repair counter uses the brief's pluralisation |
 | T08 | history table has the 5 columns |
 | T09 | history has data rows |
+| T20 | repairs section renders its card title |
 | T10 | **money law** — «Ремонт» rows show `—` in Сумма, never a ruble value |
 | T11 | repair rows carry lifecycle statuses, never store fulfilment |
 | T12 | repair ticket detail (blocks A–F) renders |
