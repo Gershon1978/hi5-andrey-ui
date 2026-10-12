@@ -41,7 +41,9 @@ export const MOCK_CABINET_PAYLOAD: CabinetPayload = {
       what: "Диагностика: шум и проскакивание цепи на 7-й передаче",
       kind: "repair",
       amount_rub: 150,
-      status: "processing",
+      // The 150 ₽ stays in the data so «Платежи и документы» still shows the payment;
+      // the «Ремонт» row renders an em dash instead of money.
+      status: "in_progress",
       ref: { job_id: 501 },
     },
     {
@@ -86,7 +88,7 @@ export const MOCK_CABINET_PAYLOAD: CabinetPayload = {
       what: "Регулировка натяжения троса и настройка переключателя",
       kind: "repair",
       amount_rub: 0,
-      status: "delivered",
+      status: "done",
       ref: { job_id: 480 },
     },
   ],

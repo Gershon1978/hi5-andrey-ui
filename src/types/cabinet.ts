@@ -9,7 +9,10 @@ export type CabinetStatus =
   | "shipped"
   | "delivered"
   | "returned"
-  | "cancelled";
+  | "cancelled"
+  /* repair-lifecycle statuses — used on Ремонт rows only, never on store rows */
+  | "in_progress"
+  | "done";
 
 export const STATUS_LABEL: Record<CabinetStatus, string> = {
   viewed: "Просмотрено",
@@ -21,6 +24,8 @@ export const STATUS_LABEL: Record<CabinetStatus, string> = {
   delivered: "Доставлено",
   returned: "Возврат",
   cancelled: "Отменено",
+  in_progress: "В работе",
+  done: "Завершён",
 };
 
 export type HistoryKind = "repair" | "recommendation" | "purchase" | "return";

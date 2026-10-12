@@ -494,7 +494,7 @@ export const CabinetScreen: React.FC<CabinetScreenProps> = ({
                                 <span className="kind-badge">{KIND_LABEL[row.kind] || row.kind}</span>
                               </td>
                               <td style={{ whiteSpace: "nowrap", fontWeight: row.amount_rub ? 700 : 400 }}>
-                                {row.amount_rub !== null ? `${row.amount_rub} ₽` : "—"}
+                                {row.kind === "repair" || !row.amount_rub ? "—" : `${row.amount_rub} ₽`}
                               </td>
                               <td>
                                 <span className="status-badge">

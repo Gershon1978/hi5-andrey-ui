@@ -16,7 +16,10 @@ import {
 import { MOCK_GUIDE_RESPONSE, MOCK_CABINET_RESPONSE } from "./mock/fixtures";
 import { MOCK_CABINET_PAYLOAD, MOCK_CHAT_ANSWERS } from "./mock/cabinet";
 
-const isMock = import.meta.env.VITE_AR_MOCK === "true";
+const isMock =
+  import.meta.env.VITE_AR_MOCK === "true" ||
+  (typeof location !== "undefined" &&
+    new URLSearchParams(location.search).get("mock") === "1");
 
 const BASE_OVERRIDE =
   (typeof window !== "undefined" && (window as any).__ANDREY_BASE__) || "";
