@@ -1,5 +1,17 @@
 # Andrey — what he can do, his protocols, and the flow
 
+> **VERIFIED AGAINST PRODUCTION 2026-10-12** (SSH, read-only). Live box
+> `/root/aim/app`, service `ai-mechanic` active since 2026-10-11 20:32 UTC.
+>
+> * `web/passport_api.py` md5 `85a68b2b594d546c08f3db4fe3b2bf91` (41 943 B / 934 lines)
+> * `web/funnel_state.py` md5 `3c6a9568fc18927a17e85d4ba4065c43` (12 472 B / 299 lines)
+> * `mechanic/sessions.py` md5 `fc81606b3ff266159534d79763ef882c` (11 243 B / 272 lines)
+> * **Correction to an earlier report:** `ar/guide` **and** `ar/commit` **are live and
+>   reachable**; the AR lane is **fee-waived** (`_AR_FEE_RUB = 0`). What is missing is
+>   `ar/pay` and `cabinet` — both absent from the live code entirely.
+> * `x-customer-id` appears **nowhere** in the live app (the bypass is not deployed).
+> * `purge_media` is live but has **no call site** anywhere in the app.
+
 Read from the **live system** (route allow-list, `verdict.py`, `jobs.py`, `funnel_state.py`,
 `procedure_catalog.py`, and the live `/api/capture` + `/api/services` responses), not from prose.
 Where something is *not* live yet it is marked. As of **2026-10-12**.
@@ -24,10 +36,11 @@ books the workshop — **never inventing a price, a procedure or a part number**
 | 8 | **Offer the fork** — *DIY with the AI guide* (flat **150 ₽**, one price for every group) vs *book the workshop* (base→difficult estimate, summed over the matched basket) | `verdict.diy_fork` / `workshop_fork` | ✅ |
 | 9 | **Promise the guarantee, verbatim** — «Если не получится доделать самому, вся сумма за AI-гид зачитывается как скидка на визит в мастерскую.» | `verdict.GUARANTEE` | ✅ |
 | 10 | **Hand the case to the workshop** — creates the ticket, once per session | `POST /api/handoff` | ✅ |
-| 11 | **Build the AR guide (S3)** — ordered steps from **real** jobs (name + minutes + price range), max 3 steps; unknown codes dropped; `pins` **always empty** by design | `procedure_catalog.build_guide` | ⚠ built — `ar/guide` **not in the live allow-list** |
-| 12 | **Take payment for the session** (the order is handed to ocStore) | `ar/pay`, `ar/commit` | ⚠ staged, not live |
-| 13 | **Show the cabinet** (bikes, history, ticket A–F, payments, chat) | `GET /api/cabinet` | ⚠ built + fixed, not deployed |
-| 14 | **Voice session / booking / basket** | `audio`, `book`, `basket`, `basket/add` | ❌ excluded until the identity bridge exists |
+| 11 | **Build the AR guide (S3)** — ordered steps from **real** jobs (name + minutes + price range), max 3 steps; unknown codes dropped; `pins` **always empty** by design | `procedure_catalog.build_guide` | ✅ **LIVE** — `ar/guide` (GET, cheap) |
+| 12 | **Unlock the guide (S2→S3)** — currently **fee-waived**: `_AR_FEE_RUB = 0`, so the guide is handed out at no charge. The fee is *reported*, never invented | `POST /api/ar/commit` | ✅ **LIVE** — idempotent by CAS |
+| 13 | **Charge for the session** — create the ocStore order for the AI fee and hand back the checkout | `ar/pay` | ❌ **absent everywhere** — only needed once the fee is switched on |
+| 14 | **Show the cabinet** (bikes, history, ticket A–F, payments, chat) | `GET /api/cabinet` | ❌ absent everywhere — **identity-required** (Phase 1) |
+| 15 | **Voice session / booking / basket** | `audio`, `book`, `basket`, `basket/add` | ❌ excluded until the identity bridge exists (the `audio` handler exists but is not in the allow-list) |
 
 **His vocabulary is closed.** A cause must come from the rule table or the job menu; a model may only
 **select** from the job-code list — never author a procedure or a price. Adding a repair = adding a CRM
@@ -86,7 +99,22 @@ POST /api/flow     →    passport (identify) ─┬─ blueprints       what bi
 deliberately *not* applied to a guide the customer did not ask for — an unsupported fault exits as a
 workshop suggestion instead of a made-up procedure.
 
-## 5 · Analysis — where it is strong, and where it breaks
+## 6 · Three money things — keep them apart
+
+These have been drifting together in conversation. In the code and the spec they are three
+separate concepts, and merging any two of them is a bug:
+
+| # | Concept | What it is | Where it lives |
+|---|---|---|---|
+| 1 | **The free-repair entitlement** | **One repair job** earned per qualifying purchase (paid order, total ≥ 1 000 ₽, containing at least one line that is *not* the AI-repair product). **Never money** — no ruble value, no wallet, no balance. Consumed by starting a job, granted idempotently, revoked only while still `open`. | `CABINET_SPEC_V1.md` D2 + §2 (`ai_repair_entitlement`) |
+| 2 | **The 150 ₽ AI-guide fee** | The **price of one DIY session**, sold as the «Ai Ремонт» product (id 65882) at checkout. Money, and legitimate — the spec's line is *«150 ₽ as the price of the «AI-ремонт» product at checkout is fine; 150 ₽ as a discount on a parts order is banned»*. | `verdict.AI_GUIDE_FEE_RUB`, ocStore product 65882 |
+| 3 | **The fee today = 0** | The live lane is **fee-waived** (`_AR_FEE_RUB = 0`), so `ar/commit` currently hands out the guide **at no charge**. Switching the 150 ₽ on is a deliberate decision that also requires `ar/pay` (which does not exist yet). | live `web/passport_api.py:97` |
+
+**Do not merge #1 and #2.** An entitlement is a *job*; the fee is a *price*. The moment the
+entitlement is expressed in rubles (a «150 ₽ credit», a token balance, a wallet) the whole
+"what the customer must never see" list in §2.2 is violated. #3 is a business switch, not a
+design change — but while it is 0, nothing in the paid path can be tested against money.
+
 
 **Strong (worth protecting, because it is structural rather than editorial)**
 
