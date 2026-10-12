@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError } from "./api";
+import { api, ApiRefusalError } from "./api";
 import { ArGuideResponse } from "./types/ar";
 import { OfferScreen } from "./screens/OfferScreen";
 import { ArGuideScreen } from "./screens/ArGuideScreen";
@@ -17,6 +17,7 @@ type AppState =
   | "PARTS"
   | "AR_GUIDE"
   | "CABINET";
+
 
 const BLUEPRINT_LABELS: Record<string, string> = {
   bike: "Модель велосипеда",
@@ -44,6 +45,90 @@ const BLUEPRINT_LABELS: Record<string, string> = {
   frame_material: "Материал рамы",
   source_note: "Источник данных",
 };
+
+/* Monoline inline SVG icons (stroke: 2.5, round caps, currentColor, no fill) */
+function CameraIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function VideoCameraIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="13" height="14" rx="3" />
+      <path d="m15 10 6-4v12l-6-4v-4z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function BicycleIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5.5" cy="17.5" r="3.5" />
+      <circle cx="18.5" cy="17.5" r="3.5" />
+      <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5L8.5 9H12l3 4.5h3.5" />
+      <path d="M5.5 17.5 10 9" />
+    </svg>
+  );
+}
+
+function GearIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function ClipboardIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+    </svg>
+  );
+}
+
+function PrinterIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect x="6" y="14" width="12" height="8" rx="1" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  );
+}
+
+function ArrowLeftIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
 
 function humanKey(key: string): string {
   if (BLUEPRINT_LABELS[key]) return BLUEPRINT_LABELS[key];
@@ -78,10 +163,9 @@ function formatFileSize(bytes: number): string {
 
 export default function App() {
   const [state, setState] = useState<AppState>("INTRO");
-  const [previousState, setPreviousState] = useState<AppState>("VERDICT");
-  const [userIntent, setUserIntent] = useState<"REPAIR" | "PARTS" | null>(null);
+  const [userIntent, setUserIntent] = useState<"REPAIR" | "PARTS">("REPAIR");
 
-  // User input metadata
+  // User input metadata (ambient prompts)
   const [model, setModel] = useState("");
   const [showModelInput, setShowModelInput] = useState(false);
   const [symptom, setSymptom] = useState("");
@@ -98,30 +182,38 @@ export default function App() {
   const [flowResult, setFlowResult] = useState<any>(null);
   const [ticket, setTicket] = useState<any>(null);
 
-  // AR Stage Results
-  const [arGuide, setArGuide] = useState<ArGuideResponse | null>(null);
-  const [paidWithCredit, setPaidWithCredit] = useState(false);
-  const [payUrl, setPayUrl] = useState<string | undefined>(undefined);
-
   // Status & long-running progress
   const [busy, setBusy] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [err, setErr] = useState<string | null>(null);
-  const [errCode, setErrCode] = useState<string>("");
-  const [passportFailed, setPassportFailed] = useState(false);
-  const [verdictSource, setVerdictSource] = useState<"video" | "text">("video");
   const [copied, setCopied] = useState(false);
+  const [partsOrdered, setPartsOrdered] = useState(false);
+
+  // AR & Cabinet state (Round 8)
+  const [guideResponse, setGuideResponse] = useState<ArGuideResponse | null>(null);
+  const [paidWithCredit, setPaidWithCredit] = useState(false);
+  const [payUrl, setPayUrl] = useState<string | undefined>(undefined);
+  const [arEmail, setArEmail] = useState("");
+  const [previousState, setPreviousState] = useState<AppState>("VERDICT");
+  const [openCreditsCount, setOpenCreditsCount] = useState<number>(0);
 
   // File input refs
   const bikeVideoInputRef = useRef<HTMLInputElement>(null);
   const problemVideoInputRef = useRef<HTMLInputElement>(null);
   const deeperInputRef = useRef<HTMLInputElement>(null);
 
+  // Initial mount: check health, capture guidance, and check open credits if authenticated
   useEffect(() => {
     api.health().catch(() => {});
     api.capture().catch(() => {});
+    api.cabinet()
+      .then((c) => {
+        if (c?.credits_open) setOpenCreditsCount(c.credits_open);
+      })
+      .catch(() => {});
   }, []);
 
+  // Timer for long-running calls
   useEffect(() => {
     let timer: any = null;
     if (busy) {
@@ -137,13 +229,12 @@ export default function App() {
     };
   }, [busy]);
 
+  // When bike video is chosen: immediately trigger /api/passport in background
   async function handleBikeVideoSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const file = filesList[0];
     setBikeVideo(file);
     setErr(null);
-    setErrCode("");
-    setPassportFailed(false);
     setState("CHOICE");
 
     setPassportLoading(true);
@@ -151,112 +242,18 @@ export default function App() {
       const p = await api.passport([file], model, true);
       const resolved = p.passport || p;
       setPassport(resolved);
-      setPassportFailed(false);
       if (resolved?.identity?.make || resolved?.identity?.model) {
         const fullModel = [resolved.identity.make, resolved.identity.model].filter(Boolean).join(" ");
         if (!model) setModel(fullModel);
       }
     } catch (e: any) {
       console.warn("Passport extraction fallback:", e);
-      setPassportFailed(true);
-      setShowModelInput(true);
     } finally {
       setPassportLoading(false);
     }
   }
 
-  function noteError(e: any) {
-    const code = e instanceof ApiError ? e.code : "";
-    setErrCode(code);
-    setErr(e?.message || String(e));
-
-    // Spec B5: Refusal normalisation handling
-    if (e instanceof ApiError) {
-      if (e.status === 402 || e.code === "payment_required") {
-        setPayUrl(e.payUrl);
-        setState("VERDICT");
-      } else if (e.code === "stage_skipped") {
-        setState("VERDICT");
-      }
-    }
-  }
-
-  function clearErr() {
-    setErr(null);
-    setErrCode("");
-  }
-
-  async function ensureSession(): Promise<boolean> {
-    if (flowResult?.session_id) return true;
-    const m = model.trim();
-    if (!m) {
-      setShowModelInput(true);
-      setShowSymptomInput(true);
-      setErr("Нужна модель велосипеда — без неё я не к чему привязать диагноз.");
-      setErrCode("");
-      return false;
-    }
-    try {
-      const p = await api.passport([], m, false);
-      setPassport(p.passport || p);
-      return true;
-    } catch (e: any) {
-      noteError(e);
-      return false;
-    }
-  }
-
-  async function runTextVerdict() {
-    const symptomText = symptom.trim();
-    const modelText = model.trim();
-    if (!symptomText && !modelText) {
-      setShowSymptomInput(true);
-      setShowModelInput(true);
-      setErr("Опишите проблему словами — по тексту я всё ещё могу помочь.");
-      setErrCode("");
-      return;
-    }
-    clearErr();
-    setBusy(true);
-    try {
-      if (!(await ensureSession())) return;
-      const res = await api.verdict({
-        symptom: symptomText || "Шум или люфт в узле",
-        model: modelText,
-        use_model: false,
-      });
-      setFlowResult({ verdict: res.verdict || res, session_id: res.session_id });
-      setVerdictSource("text");
-      setState("VERDICT");
-    } catch (e: any) {
-      noteError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function runProVerdict() {
-    const symptomText = symptom.trim() || "Шум или люфт в узле";
-    const modelText = model.trim();
-    clearErr();
-    setBusy(true);
-    try {
-      if (!(await ensureSession())) return;
-      const res = await api.verdict({
-        symptom: symptomText,
-        model: modelText,
-        use_model: true,
-      });
-      setFlowResult({ verdict: res.verdict || res, session_id: res.session_id });
-      setVerdictSource("text");
-      setState("VERDICT");
-    } catch (e: any) {
-      noteError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  // Handle choice selection
   function handleSelectIntent(intent: "REPAIR" | "PARTS") {
     setUserIntent(intent);
     if (intent === "PARTS") {
@@ -266,6 +263,7 @@ export default function App() {
     }
   }
 
+  // When problem video is chosen: immediately trigger /api/flow
   async function handleProblemVideoSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const file = filesList[0];
@@ -279,7 +277,6 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.flow([file], symptomText, modelText);
       setFlowResult(res);
-      setVerdictSource("video");
 
       if (res?.passport && !passport) {
         setPassport(res.passport);
@@ -292,12 +289,13 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
-      noteError(e);
+      setErr(e.message || String(e));
     } finally {
       setBusy(false);
     }
   }
 
+  // Retry problem video analysis
   async function retryProblemVideo() {
     if (!problemVideo) return;
     setErr(null);
@@ -307,7 +305,6 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.flow([problemVideo], symptomText, modelText);
       setFlowResult(res);
-      setVerdictSource("video");
       const verdict = res?.verdict;
       if (verdict?.gate === "deeper" && (verdict?.round_no ?? 0) < 2) {
         setState("DEEPER");
@@ -315,12 +312,13 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
-      noteError(e);
+      setErr(e.message || String(e));
     } finally {
       setBusy(false);
     }
   }
 
+  // Handle deeper clarifier upload
   async function handleDeeperSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
     const newFiles = Array.from(filesList);
@@ -335,7 +333,6 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.deeper(newFiles, symptomText, modelText, nextRound);
       const updatedVerdict = res.verdict || res;
-      setVerdictSource("video");
 
       const updatedFlow = {
         ...flowResult,
@@ -349,110 +346,152 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
-      noteError(e);
+      setErr(e.message || String(e));
     } finally {
       setBusy(false);
     }
   }
 
+  // B2: Start AI-Repair (150 RUB or credit) -> arPay -> arCommit -> arGuide
+  async function handleStartAiRepair(email?: string, useCredit = false) {
+    if (email) setArEmail(email);
+    setBusy(true);
+    setErr(null);
+    setPayUrl(undefined);
+
+    const sessionId = flowResult?.session_id;
+
+    try {
+      // If paying with money (not credit), initiate order with ocStore
+      if (!useCredit) {
+        try {
+          const payRes = await api.arPay({ session_id: sessionId, email: email || arEmail });
+          if (payRes.pay_url) {
+            setPayUrl(payRes.pay_url);
+          }
+        } catch (e: any) {
+          // If pay route returns refusal or error, capture it
+          console.warn("arPay error:", e);
+        }
+      }
+
+      // Now call POST /api/ar/commit
+      const commitRes = await api.arCommit({
+        session_id: sessionId,
+        use_credit: useCredit,
+      });
+
+      if (commitRes.ok) {
+        setPaidWithCredit(commitRes.paid_with === "credit");
+        // Transition to S3: fetch the guide
+        const verdict = flowResult?.verdict;
+        const jobCodes = verdict?.causes
+          ?.map((c: any) => c.job_code)
+          .filter(Boolean)
+          .join(",") || "";
+        const guideRes = await api.arGuide(jobCodes, symptom);
+        setGuideResponse(guideRes);
+        setState("AR_GUIDE");
+      }
+    } catch (e: any) {
+      if (e instanceof ApiRefusalError) {
+        // Spec B5 & Refusal handling:
+        // 402 payment_required -> return to offer with pay_url
+        if (e.status === 402) {
+          if (e.payUrl) setPayUrl(e.payUrl);
+          setState("VERDICT");
+          setErr("Требуется оплата 150 ₽ для доступа к персональному AI-ремонту.");
+          return;
+        }
+        // 409 stage_skipped -> return to verdict
+        if (e.status === 409 && (e.code === "stage_skipped" || e.message.includes("stage_skipped") || e.message.includes("verdict"))) {
+          setState("VERDICT");
+          setErr("Сначала необходимо завершить диагностику поломки.");
+          return;
+        }
+        // 409 busy_lease -> resume / retry
+        if (e.status === 409 || e.status === 429) {
+          setErr("Сессия занята обработкой. Пожалуйста, повторите через несколько секунд.");
+          return;
+        }
+        // 401 identity_required -> link to shop login
+        if (e.status === 401) {
+          setErr("Для использования кредита требуется войти в аккаунт hi5.bike.");
+          return;
+        }
+      }
+      setErr(e.message || "Не удалось запустить AI-ремонт");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // B3: Followup media re-ask (inside same job, never recharges)
+  async function handleUploadMoreMedia(files: File[]) {
+    if (files.length === 0) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      // Re-ask clarifier media without charging
+      const symptomText = symptom.trim() || "Дополнительный ракурс для AI-гида";
+      const modelText = model || passport?.identity?.model || "";
+      const currentRound = flowResult?.verdict?.round_no ?? 0;
+      const res = await api.deeper(files, symptomText, modelText, currentRound + 1, arEmail);
+      if (res?.verdict) {
+        setFlowResult({
+          ...flowResult,
+          verdict: res.verdict,
+        });
+      }
+      // Refresh guide
+      const verdict = res?.verdict || flowResult?.verdict;
+      const jobCodes = verdict?.causes
+        ?.map((c: any) => c.job_code)
+        .filter(Boolean)
+        .join(",") || "";
+      const refreshedGuide = await api.arGuide(jobCodes, symptom);
+      setGuideResponse(refreshedGuide);
+    } catch (e: any) {
+      setErr(e.message || "Не удалось обновить гид по новому фото");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // B4: Start new repair with credit from cabinet
+  async function handleStartNewWithCredit() {
+    setState("VERDICT");
+    await handleStartAiRepair(arEmail, true);
+  }
+
+  // Handoff to workshop
   async function handleHandoff() {
     setBusy(true);
     setErr(null);
     try {
-      const v = flowResult?.verdict;
+      const verdict = flowResult?.verdict;
       const t = await api.handoff({
         session_id: flowResult?.session_id,
         model: model || passport?.identity?.model || "",
         symptom: symptom || "Заявка из AI-диагностики",
-        paid_ar_credit_rub: v?.diy?.price_rub || 0,
-        ar_tier: v?.diy?.tier || 0,
+        paid_ar_credit_rub: verdict?.diy?.price_rub || 0,
+        ar_tier: verdict?.diy?.tier || 0,
+        email: arEmail || undefined,
       });
       setTicket(t.ticket || t);
       setState("TICKET");
     } catch (e: any) {
-      noteError(e);
+      setErr(e.message || String(e));
     } finally {
       setBusy(false);
     }
   }
 
-  // ── S3 Entry & Flow Handlers (Spec B2) ────────────────────────────────────────────────
-  async function handleStartAiRepair(optionalEmail?: string) {
-    setBusy(true);
-    clearErr();
-    const sid = flowResult?.session_id;
 
-    try {
-      // Step A: Attempt CAS advance with commit
-      const commitRes = await api.arCommit({ session_id: sid, use_credit: false });
-
-      if (commitRes.ok) {
-        setPaidWithCredit(commitRes.paid_with === "credit");
-        // Load AR guidance
-        const causes = flowResult?.verdict?.causes || [];
-        const jobCodes = causes.map((c: any) => c.job_code).filter(Boolean).join(",");
-        const guideData = await api.arGuide(jobCodes, symptom);
-        setArGuide(guideData);
-        setState("AR_GUIDE");
-        return;
-      }
-    } catch (e: any) {
-      if (e instanceof ApiError && (e.status === 402 || e.code === "payment_required")) {
-        // Spec B2: 402 -> Return to Offer with pay_url
-        if (e.payUrl) {
-          setPayUrl(e.payUrl);
-        } else {
-          // If pay_url was not attached, invoke A3 ocStore order creation
-          try {
-            const payRes = await api.arPay(sid || "active_session");
-            setPayUrl(payRes.pay_url);
-          } catch (payErr: any) {
-            noteError(payErr);
-          }
-        }
-        return;
-      }
-      noteError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleStartNewWithCredit() {
-    setBusy(true);
-    clearErr();
-    try {
-      const commitRes = await api.arCommit({ session_id: flowResult?.session_id, use_credit: true });
-      if (commitRes.ok) {
-        setPaidWithCredit(true);
-        const guideData = await api.arGuide("", symptom);
-        setArGuide(guideData);
-        setState("AR_GUIDE");
-      }
-    } catch (e: any) {
-      noteError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleUploadMoreMedia(files: File[]) {
-    setBusy(true);
-    clearErr();
-    try {
-      const sid = flowResult?.session_id || "active_session";
-      const updatedGuide = await api.arAddMedia(sid, files);
-      setArGuide(updatedGuide);
-    } catch (e: any) {
-      noteError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  // Reset entire flow
   function handleReset() {
     setState("INTRO");
-    setUserIntent(null);
+    setUserIntent("REPAIR");
     setModel("");
     setShowModelInput(false);
     setSymptom("");
@@ -463,14 +502,9 @@ export default function App() {
     setPassport(null);
     setFlowResult(null);
     setTicket(null);
-    setArGuide(null);
-    setPayUrl(undefined);
-    setPaidWithCredit(false);
     setBusy(false);
     setErr(null);
-    setErrCode("");
-    setPassportFailed(false);
-    setVerdictSource("video");
+    setPartsOrdered(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -493,6 +527,7 @@ export default function App() {
     });
   }
 
+  // Rotating analysis messages
   function getAnalysisMessage() {
     if (elapsedSeconds < 15) return "Изучаем трансмиссию и геометрию…";
     if (elapsedSeconds < 30) return "Слушаем аудиодорожку…";
@@ -503,62 +538,54 @@ export default function App() {
   const verdict = flowResult?.verdict;
   const roundNo = verdict?.round_no ?? 0;
   const isCapReached = roundNo >= 2;
+  const bestCause = (verdict?.causes || [])
+    .slice()
+    .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))[0];
 
+  // Tags for passport preview
   const blueprintEntries = getNonEmptyObjectEntries(passport?.blueprint);
   const passportTags = blueprintEntries.slice(0, 3).map(([k, v]) => `${humanKey(k)}: ${v}`);
 
-  const partsQuery =
-    (Array.isArray(passport?.required_parts)
-      ? passport.required_parts.find((p: any) => typeof p === "string" && p.trim())
-      : "") ||
-    [passport?.identity?.make, passport?.identity?.model].filter(Boolean).join(" ") ||
-    model ||
-    "запчасти";
-
   return (
     <main className="canvas">
+      {/* Header */}
       <header className="app-header">
         <div className="avatar-wrap">
           <div className="avatar">А</div>
           <div className="online-ring" title="Андрей на связи" />
         </div>
+        <div className="header-info">
+          <div className="header-title">Андрей · AI-механик</div>
+          <div className="header-sub">Мастерская hi5.bike</div>
+        </div>
+        <div className="header-actions">
+          {state !== "CABINET" && (
+            <button
+              type="button"
+              className="cabinet-nav-btn"
+              onClick={() => {
+                setPreviousState(state);
+                setState("CABINET");
+              }}
+            >
+              Кабинет
+              {openCreditsCount > 0 && (
+                <span className="credit-badge-pill" title={`Доступно бесплатных ремонтов: ${openCreditsCount}`}>
+                  {openCreditsCount}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
       </header>
 
-      {/* Recovery Banner */}
+      {/* Network Failure Banner (Edge Case §5) */}
       {err && (
-        <div className={`error-banner ${errCode ? "is-limit" : ""}`}>
-          <div>
-            {errCode === "upload_limit"
-              ? "На этот час загрузки видео исчерпаны. Загрузки подождут — а помочь могу уже сейчас по описанию: опишите проблему словами."
-              : errCode === "rate_limit"
-              ? "Серверу нужно передохнуть. Через минуту попробуйте снова — или опишите проблему словами, я отвечу без видео."
-              : errCode === "payment_required"
-              ? "Для перехода к персональному гиду требуется оплата 150 ₽. Ссылка сформирована ниже."
-              : "Что-то пошло не так при анализе. Файлы сохранены. Попробуем ещё раз?"}
-          </div>
-          <div className="banner-actions">
-            {errCode !== "upload_limit" && state === "ANALYZING" && (
-              <button type="button" onClick={retryProblemVideo}>
-                Повторить
-              </button>
-            )}
-            <button type="button" onClick={runTextVerdict} disabled={busy}>
-              {busy ? "Андрей думает…" : "Описать словами — бесплатно"}
-            </button>
-            <button type="button" className="btn-pro" onClick={runProVerdict} disabled={busy}>
-              {busy ? "Андрей думает…" : "Сессия с механиком · 150 ₽"}
-            </button>
-
-            {errCode === "session_expired" && (
-              <div className="hint-line">Сессия не найдена или истекла — начните заново и снова определите велосипед.</div>
-            )}
-            {errCode === "stage_skipped" && (
-              <div className="hint-line">Сначала определите велосипед — по видео или вручную.</div>
-            )}
-            {errCode === "verdict_duplicate" && (
-              <div className="hint-line">Вердикт по этой сессии уже получен — результат выше, платить снова не нужно.</div>
-            )}
-          </div>
+        <div className="error-banner">
+          <div>Что-то пошло не так при анализе. Попробуем ещё раз?</div>
+          <button type="button" onClick={state === "ANALYZING" ? retryProblemVideo : () => setErr(null)}>
+            Повторить
+          </button>
         </div>
       )}
 
@@ -600,20 +627,46 @@ export default function App() {
         }}
       />
 
-      {/* S0: INTRO */}
+      {/* =========================================================================
+          S0: INTRO
+          ========================================================================= */}
       {state === "INTRO" && (
-        <div className="speech-bubble">
-          «Покажите велосипед: 10 секунд, без звука.»
-        </div>
+        <>
+          <div className="speech-bubble">
+            «Привет, я AI-копия веломастера Андрея из мастерской hi5.bike. Чтобы я был полезен, сначала покажи, на чём катаешься.»
+          </div>
+
+          {/* Ambient Prompt: Model name */}
+          {!showModelInput ? (
+            <button
+              type="button"
+              className="ambient-toggle"
+              onClick={() => setShowModelInput(true)}
+            >
+              + Назвать модель текстом
+            </button>
+          ) : (
+            <div className="ambient-field">
+              <input
+                type="text"
+                placeholder="Модель велосипеда (напр. Scott Big Jon)"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              />
+            </div>
+          )}
+        </>
       )}
 
-      {/* S2: CHOICE */}
+      {/* =========================================================================
+          S2: CHOICE
+          ========================================================================= */}
       {state === "CHOICE" && (
         <>
           {bikeVideo && (
             <div className="video-preview-unit">
               <div className="video-info">
-                <span>🎥</span>
+                <VideoCameraIcon />
                 <span>{bikeVideo.name} ({formatFileSize(bikeVideo.size)})</span>
               </div>
               <button
@@ -627,69 +680,41 @@ export default function App() {
           )}
 
           <div className="speech-bubble">
-            «Пока изучаю видео, чем помочь?»
+            «Принял видео, изучаю байк. Что делаем дальше?»
           </div>
 
           <div className="choice-list">
-            <button
-              type="button"
+            <div
               className={`choice-card ${userIntent === "REPAIR" ? "active" : ""}`}
-              aria-label="Помощь в ремонте: найти и устранить поломку"
               onClick={() => handleSelectIntent("REPAIR")}
             >
-              <span className="choice-card-badge">
-                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor"
-                     strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-              </span>
-              <span className="choice-card-text">
-                <span className="choice-card-title">Помощь в ремонте</span>
-                <span className="choice-card-sub">Найти и устранить поломку</span>
-              </span>
-            </button>
+              <div className="choice-card-title">Помощь в ремонте</div>
+              <div className="choice-card-sub">Разберёмся со звуками, люфтами и переключением</div>
+            </div>
 
-            <button
-              type="button"
+            <div
               className={`choice-card ${userIntent === "PARTS" ? "active" : ""}`}
-              aria-label="Поиск запчастей: подобрать совместимую деталь"
               onClick={() => handleSelectIntent("PARTS")}
             >
-              <span className="choice-card-badge">
-                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor"
-                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9.5" />
-                  <circle cx="12" cy="12" r="6" />
-                  <circle cx="12" cy="12" r="2.5" />
-                  <path d="M12 2.5V1M19.8 4.2 20.9 3.1M21.5 12H23M19.8 19.8l1.1 1.1M12 21.5V23M4.2 19.8 3.1 20.9M2.5 12H1M4.2 4.2 3.1 3.1" />
-                </svg>
-              </span>
-              <span className="choice-card-text">
-                <span className="choice-card-title">Поиск запчастей</span>
-                <span className="choice-card-sub">Подобрать совместимую деталь</span>
-              </span>
-            </button>
+              <div className="choice-card-title">Поиск запчастей</div>
+              <div className="choice-card-sub">Определим стандарты цепи, колодок и расходников</div>
+            </div>
           </div>
         </>
       )}
 
-      {/* S3: PASSPORT */}
+      {/* =========================================================================
+          S3: PASSPORT
+          ========================================================================= */}
       {state === "PASSPORT" && (
         <>
           <div className="speech-bubble">
-            {passportFailed || !passport?.identity?.make
-              ? "«Модель по видео определить не удалось — бывает. Напишите её, и я продолжу:»"
-              : "«Я узнал твой байк: <strong>" + (passport?.identity?.make || "") + " " +
-                (passport?.identity?.model || "") + "</strong> " +
-                (passport?.identity?.year_window ? `(${passport.identity.year_window}) ` : "") +
-                "Теперь покажи, что случилось.»"}
+            «Я узнал твой байк: <strong>{passport?.identity?.make || model || "Велосипед"} {passport?.identity?.model || ""}</strong> {passport?.identity?.year_window ? `(${passport.identity.year_window})` : ""}. Теперь покажи, что случилось.»
           </div>
 
           <div className="card-unit">
-            <span className={`badge-tag ${passport?.identity?.make ? "" : "badge-warn"}`}>
-              {passport?.identity?.make ? "✓ Велосипед опознан" : "Модель нужна вручную"}
-            </span>
-            <div style={{ fontSize: "18px", fontWeight: 700, margin: "4px 0" }}>
+            <span className="badge-tag"><CheckIcon /> Велосипед опознан</span>
+            <div style={{ fontSize: "22px", fontWeight: 700, margin: "8px 0" }}>
               {[passport?.identity?.make, passport?.identity?.model, passport?.identity?.year_window].filter(Boolean).join(" ") || model || "Ваш велосипед"}
             </div>
 
@@ -708,10 +733,10 @@ export default function App() {
                 style={{ marginTop: "12px" }}
                 onClick={() => setShowModelInput(true)}
               >
-                Модель определена неверно?
+                Модель определена неверно
               </button>
             ) : (
-              <div className="ambient-field" style={{ marginTop: "10px" }}>
+              <div className="ambient-field" style={{ marginTop: "12px" }}>
                 <input
                   type="text"
                   placeholder="Уточните модель (напр. Scott Big Jon 2020)"
@@ -722,6 +747,7 @@ export default function App() {
             )}
           </div>
 
+          {/* Ambient Prompt: Symptom text */}
           {!showSymptomInput ? (
             <button
               type="button"
@@ -740,25 +766,18 @@ export default function App() {
               />
             </div>
           )}
-
-          <button type="button" className="micro-link" onClick={runProVerdict}>
-            Сразу к механику · платная сессия 150 ₽
-          </button>
-          {model.trim() && (
-            <button type="button" className="micro-link" onClick={runTextVerdict}>
-              Описать проблему словами — бесплатно
-            </button>
-          )}
         </>
       )}
 
-      {/* S4: ANALYZING */}
+      {/* =========================================================================
+          S4: ANALYZING
+          ========================================================================= */}
       {state === "ANALYZING" && (
         <>
           {passport && (
-            <div className="card-unit" style={{ padding: "12px 16px", marginBottom: "12px" }}>
-              <span className="badge-tag">🚲 {passport?.identity?.make} {passport?.identity?.model}</span>
-              <div style={{ fontSize: "14px", color: "var(--muted)" }}>
+            <div className="card-unit" style={{ padding: "16px 20px", marginBottom: "16px" }}>
+              <span className="badge-tag"><BicycleIcon /> {passport?.identity?.make} {passport?.identity?.model}</span>
+              <div style={{ fontSize: "14px", color: "var(--muted)", marginTop: "4px" }}>
                 Байк зафиксирован. Слушаем видео проблемы…
               </div>
             </div>
@@ -770,14 +789,16 @@ export default function App() {
         </>
       )}
 
-      {/* S5: VERDICT -> OfferScreen (Spec B1 / B2: Free content -> Free repair path -> 150 ₽ offer) */}
+      {/* =========================================================================
+          S5: VERDICT / OFFER (Spec B1: free content -> free path -> 150 RUB offer)
+          ========================================================================= */}
       {state === "VERDICT" && verdict && (
         <OfferScreen
           passport={passport}
           verdict={verdict}
-          verdictSource={verdictSource}
+          verdictSource={problemVideo ? "video" : "text"}
           isCapReached={isCapReached}
-          onSelectAiRepair={handleStartAiRepair}
+          onSelectAiRepair={(email) => handleStartAiRepair(email, false)}
           onHandoffWorkshop={handleHandoff}
           busy={busy}
           payUrl={payUrl}
@@ -785,14 +806,16 @@ export default function App() {
         />
       )}
 
-      {/* S3 Paid DIY Guide Screen (Spec B3) */}
-      {state === "AR_GUIDE" && arGuide && (
+      {/* =========================================================================
+          S3: AR_GUIDE (Spec B3: Ordered steps, overlay, followup media re-ask)
+          ========================================================================= */}
+      {state === "AR_GUIDE" && guideResponse && (
         <ArGuideScreen
-          guideResponse={arGuide}
+          guideResponse={guideResponse}
           mediaFile={problemVideo || bikeVideo}
           paidWithCredit={paidWithCredit}
           onUploadMoreMedia={handleUploadMoreMedia}
-          onFinishJob={() => setState("TICKET")}
+          onFinishJob={() => setState("CABINET")}
           onOpenCabinet={() => {
             setPreviousState("AR_GUIDE");
             setState("CABINET");
@@ -801,16 +824,20 @@ export default function App() {
         />
       )}
 
-      {/* Cabinet Screen (Spec B4) */}
+      {/* =========================================================================
+          CABINET: Orders, Credits, Past Jobs, use credit action (Spec B4)
+          ========================================================================= */}
       {state === "CABINET" && (
         <CabinetScreen
-          onBackToCurrent={() => setState(previousState)}
+          onBackToCurrent={() => setState(previousState || "VERDICT")}
           onStartNewWithCredit={handleStartNewWithCredit}
           busy={busy}
         />
       )}
 
-      {/* DEEPER */}
+      {/* =========================================================================
+          DEEPER: Clarifier photo asks (No prices!)
+          ========================================================================= */}
       {state === "DEEPER" && verdict && (
         <>
           <div className="speech-bubble">
@@ -819,7 +846,7 @@ export default function App() {
 
           <div className="card-unit">
             <span className="badge-tag badge-warn">Уточнение {roundNo + 1} из 2</span>
-            <ul style={{ margin: "12px 0 0", paddingLeft: "20px", fontSize: "15px", lineHeight: "1.6" }}>
+            <ul style={{ margin: "12px 0 0", paddingLeft: "20px", fontSize: "16px", lineHeight: "1.6" }}>
               {verdict.deeper?.map((d: string, i: number) => (
                 <li key={i}><strong>{d}</strong></li>
               ))}
@@ -828,7 +855,9 @@ export default function App() {
         </>
       )}
 
-      {/* TICKET */}
+      {/* =========================================================================
+          TICKET: Handoff confirmation
+          ========================================================================= */}
       {state === "TICKET" && ticket && (
         <>
           <div className="speech-bubble">
@@ -836,9 +865,9 @@ export default function App() {
           </div>
 
           <div className="card-unit">
-            <span className="badge-tag">✓ Заявка зарегистрирована</span>
+            <span className="badge-tag"><CheckIcon /> Заявка зарегистрирована</span>
 
-            <div style={{ marginTop: "12px" }}>
+            <div style={{ marginTop: "16px" }}>
               {ticket.bike_summary && (
                 <div className="ticket-row">
                   <span className="ticket-label">Велосипед</span>
@@ -866,7 +895,7 @@ export default function App() {
               {ticket.paid_ar_credit_rub !== undefined && (
                 <div className="ticket-row">
                   <span className="ticket-label">Скидка на визит за AI-гид</span>
-                  <span className="ticket-val" style={{ color: "var(--ok)" }}>
+                  <span className="ticket-val" style={{ color: "var(--blue)" }}>
                     {ticket.paid_ar_credit_rub} ₽
                   </span>
                 </div>
@@ -879,14 +908,14 @@ export default function App() {
               )}
             </div>
 
-            <div style={{ display: "flex", gap: "8px", marginTop: "16px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px", flexWrap: "wrap" }}>
               <button
                 type="button"
                 className="btn-pill secondary"
                 style={{ flex: 1, minHeight: "44px", fontSize: "14px" }}
                 onClick={copyTicket}
               >
-                {copied ? "✓ Скопировано" : "📋 Скопировать"}
+                {copied ? <><CheckIcon /> Скопировано</> : <><ClipboardIcon /> Скопировать</>}
               </button>
               <button
                 type="button"
@@ -894,14 +923,16 @@ export default function App() {
                 style={{ flex: 1, minHeight: "44px", fontSize: "14px" }}
                 onClick={() => window.print()}
               >
-                🖨️ Распечатать
+                <PrinterIcon /> Распечатать
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* PARTS */}
+      {/* =========================================================================
+          PARTS: Specifications & parts search (no fake data)
+          ========================================================================= */}
       {state === "PARTS" && (
         <>
           <div className="speech-bubble">
@@ -909,8 +940,8 @@ export default function App() {
           </div>
 
           <div className="card-unit">
-            <span className="badge-tag">⚙️ Спецификации узлов</span>
-            <div style={{ fontSize: "17px", fontWeight: 700, margin: "6px 0 12px" }}>
+            <span className="badge-tag"><GearIcon /> Спецификации узлов</span>
+            <div style={{ fontSize: "22px", fontWeight: 700, margin: "8px 0 16px" }}>
               {[passport?.identity?.make, passport?.identity?.model, passport?.identity?.year_window].filter(Boolean).join(" ") || model || "Велосипед"}
             </div>
 
@@ -928,9 +959,9 @@ export default function App() {
             )}
 
             {Array.isArray(passport?.required_parts) && passport.required_parts.length > 0 && (
-              <div style={{ marginTop: "12px" }}>
-                <div style={{ fontWeight: 600, fontSize: "14px", marginBottom: "4px" }}>Расходники и запчасти:</div>
-                <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px" }}>
+              <div style={{ marginTop: "16px" }}>
+                <div style={{ fontWeight: 600, fontSize: "14px", marginBottom: "6px" }}>Расходники и запчасти:</div>
+                <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: "1.6" }}>
                   {passport.required_parts.map((p: any, i: number) => (
                     <li key={i}>{typeof p === "string" ? p : JSON.stringify(p)}</li>
                   ))}
@@ -941,105 +972,176 @@ export default function App() {
             <button
               type="button"
               className="micro-link"
-              style={{ marginTop: "16px", display: "inline-block" }}
+              style={{ marginTop: "16px", display: "inline-flex", gap: "6px" }}
               onClick={() => setState("PASSPORT")}
             >
-              ← Перейти к диагностике поломки
+              <ArrowLeftIcon /> Перейти к диагностике поломки
             </button>
           </div>
         </>
       )}
 
-      {/* Bottom Dock */}
-      {state !== "AR_GUIDE" && state !== "CABINET" && state !== "VERDICT" && (
+      {/* =========================================================================
+          MORPHING ACTION UNIT (Named Component: orbit_shutter / dual_pill / ring / typing)
+          ========================================================================= */}
+      {state !== "VERDICT" && state !== "AR_GUIDE" && state !== "CABINET" && (
         <footer className="action-dock">
           <div className="action-dock-inner">
+            {/* INTRO state: Orbit Shutter */}
             {state === "INTRO" && (
-              <button
-                type="button"
-                className="orbit-shutter"
-                aria-label="Показать велосипед"
-                onClick={() => bikeVideoInputRef.current?.click()}
-              >
-                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor"
-                     strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
-                  <path d="M6.7 6.7l2.1 2.1M15.2 15.2l2.1 2.1M17.3 6.7l-2.1 2.1M8.8 15.2l-2.1 2.1" />
-                </svg>
-              </button>
-            )}
-
-            {state === "CHOICE" && passportLoading && (
-              <div className="progress-gauge">
-                <div className="progress-title">Изучаю геометрию и трансмиссию…</div>
-                <div className="progress-message">Выберите направление выше</div>
+              <div className="orbit-shutter-wrap">
+                <button
+                  type="button"
+                  className={`orbit-shutter ${busy ? "recording" : ""}`}
+                  onClick={() => bikeVideoInputRef.current?.click()}
+                  aria-label="Показать велосипед"
+                >
+                  <div className="orbit-shutter-inner">
+                    <VideoCameraIcon />
+                  </div>
+                </button>
+                <div className="shutter-label">Показать велосипед</div>
+                <div className="dock-caption">
+                  Короткое видео 10 сек. без звука со стороны цепи
+                </div>
               </div>
             )}
 
-            {state === "PASSPORT" && (
+            {/* CHOICE state: DualPill / Thinking Bubble */}
+            {state === "CHOICE" && (
               <>
+                {passportLoading ? (
+                  <div className="thinking-bubble">
+                    <div className="typing-dots">
+                      <div className="typing-dot" />
+                      <div className="typing-dot" />
+                      <div className="typing-dot" />
+                    </div>
+                    <div className="thinking-title">Изучаю геометрию и трансмиссию…</div>
+                    <div className="thinking-message">Выберите направление выше</div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-pill"
+                    onClick={() => handleSelectIntent(userIntent)}
+                  >
+                    Продолжить: {userIntent === "REPAIR" ? "Помощь в ремонте" : "Поиск запчастей"}
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* PASSPORT state: Orbit Shutter */}
+            {state === "PASSPORT" && (
+              <div className="orbit-shutter-wrap">
                 <button
                   type="button"
-                  className="btn-pill"
+                  className={`orbit-shutter ${busy ? "recording" : ""}`}
                   onClick={() => problemVideoInputRef.current?.click()}
+                  aria-label="Снять видео поломки"
                 >
-                  🎥 Снять видео поломки
+                  <div className="orbit-shutter-inner">
+                    <VideoCameraIcon />
+                  </div>
                 </button>
+                <div className="shutter-label">Снять видео поломки</div>
                 <div className="dock-caption">
                   Снимите 10 сек. со звуком: покрутите педали, пощелкайте переключателем или покажите место люфта.
                 </div>
-              </>
+              </div>
             )}
 
+            {/* ANALYZING state: Rim Ring + Thinking Bubble */}
             {state === "ANALYZING" && (
-              <div className="progress-gauge">
-                <div className="progress-title">
-                  Андрей слушает и анализирует… ({elapsedSeconds} с)
+              <div className="ring-gauge-wrap">
+                <div className="rim-ring">
+                  <svg width="80" height="80" viewBox="0 0 80 80">
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="34"
+                      fill="none"
+                      stroke="var(--wash)"
+                      strokeWidth="5"
+                    />
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="34"
+                      fill="none"
+                      stroke="var(--blue)"
+                      strokeWidth="5"
+                      strokeDasharray="213.6"
+                      strokeDashoffset={Math.max(0, 213.6 - (213.6 * Math.min(elapsedSeconds, 45)) / 45)}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="rim-ring-seconds">{elapsedSeconds} с</span>
                 </div>
-                <div className="progress-message">{getAnalysisMessage()}</div>
-                <div className="progress-note">
-                  Это занимает около 30–45 секунд. Не закрывайте экран.
+                <div className="thinking-bubble">
+                  <div className="typing-dots">
+                    <div className="typing-dot" />
+                    <div className="typing-dot" />
+                    <div className="typing-dot" />
+                  </div>
+                  <div className="thinking-title">
+                    Андрей слушает и анализирует…
+                  </div>
+                  <div className="thinking-message">
+                    {getAnalysisMessage()}
+                  </div>
+                  <div className="thinking-note">
+                    Это занимает около 30–45 секунд. Не закрывайте экран.
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* DEEPER state: Orbit Shutter for clarifier photos */}
             {state === "DEEPER" && (
-              <>
+              <div className="orbit-shutter-wrap">
                 <button
                   type="button"
-                  className="btn-pill"
+                  className={`orbit-shutter ${busy ? "recording" : ""}`}
                   onClick={() => deeperInputRef.current?.click()}
                   disabled={busy}
+                  aria-label="Загрузить фото узла"
                 >
-                  {busy ? "Андрей изучает фото…" : "📷 Загрузить фото узла"}
+                  <div className="orbit-shutter-inner">
+                    <CameraIcon />
+                  </div>
                 </button>
-                <div className="dock-caption">1–2 четких фото узла крупным планом</div>
-              </>
+                <div className="shutter-label">{busy ? "Андрей изучает фото…" : "Загрузить фото узла"}</div>
+                <div className="dock-caption">
+                  1–2 четких фото узла крупным планом
+                </div>
+              </div>
             )}
 
+            {/* TICKET state: Restart action */}
             {state === "TICKET" && (
               <button
                 type="button"
                 className="btn-pill secondary"
                 onClick={handleReset}
               >
-                ↻ Начать заново
+                <RefreshIcon /> Начать заново
               </button>
             )}
 
+            {/* PARTS state: Order CTA */}
             {state === "PARTS" && (
               <>
-                <a
+                <button
+                  type="button"
                   className="btn-pill"
-                  href={`https://hi5.bike/index.php?route=product/search&search=${encodeURIComponent(partsQuery)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() => setPartsOrdered(true)}
                 >
-                  Показать запчасти на hi5.bike
-                </a>
+                  {partsOrdered ? <><CheckIcon /> Запрос на запчасти отправлен</> : "Заказать через hi5.bike"}
+                </button>
                 <div className="dock-caption">
-                  Откроется поиск в магазине hi5.bike — наличие и заказ оформляются там
+                  Механики проверят наличие на складе и свяжутся с вами
                 </div>
               </>
             )}

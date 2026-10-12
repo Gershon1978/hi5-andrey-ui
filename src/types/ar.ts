@@ -54,6 +54,14 @@ export interface ArCommitResponse {
   pay_url?: string;
 }
 
+export interface ArPayResponse {
+  ok: boolean;
+  order_id?: number;
+  pay_url?: string;
+  code?: string;
+  message?: string;
+}
+
 export interface CabinetOrder {
   order_id: number;
   date_added: string;

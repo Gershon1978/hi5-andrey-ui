@@ -15,26 +15,6 @@ export interface PinCenterStyle {
 /**
  * Pure coordinate mapping from normalized (0.0 - 1.0) media coordinates
  * to CSS container percentages, preserving exact aspect ratio with letterboxing.
- *
- * Container: bounding box holding the rendered media (width W, height H, aspect = W/H)
- * Frame: source media aspect ratio = frame_aspect = source_w / source_h
- *
- * Worked Examples:
- * 1. 16:9 media (frame_aspect = 1.7778) rendered in a square container (1.0 aspect):
- *    - containerAspect = 1.0 < frame_aspect -> Pillarbox vertically (black bars top/bottom).
- *    - scale = 1.0. renderH = 1.0 / 1.7778 = 0.5625 (56.25%).
- *    - offsetY = (1.0 - 0.5625)/2 = 0.21875 (21.875%).
- *    - Pin at (0.5, 0.5) -> left = 50%, top = 21.875% + 0.5*56.25% = 50%.
- *
- * 2. 9:16 vertical phone clip (frame_aspect = 0.5625) in square container (1.0 aspect):
- *    - containerAspect = 1.0 > frame_aspect -> Pillarbox horizontally (bars left/right).
- *    - renderW = 1.0 * 0.5625 = 0.5625 (56.25%).
- *    - offsetX = (1.0 - 0.5625)/2 = 0.21875 (21.875%).
- *    - Pin at (0.5, 0.5) -> left = 21.875% + 0.5*56.25% = 50%, top = 50%.
- *
- * 3. Exact aspect match (containerAspect === frame_aspect):
- *    - offsetX = 0, offsetY = 0, renderW = 100%, renderH = 100%.
- *    - left = normX * 100%, top = normY * 100%.
  */
 export function computeLetterboxOffsets(
   containerWidth: number,
