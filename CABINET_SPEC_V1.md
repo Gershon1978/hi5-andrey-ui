@@ -431,6 +431,13 @@ The page shows **real financial records from the authoritative store**:
   unavailable, show the actual known status and nothing more.
 * **VAT does not exist in our code** — no VAT field, no VAT arithmetic, anywhere.
 
+**Refunds are a human decision inside ocStore (owner ruling, 2026-10-12).** A customer may *request*
+a refund from the cabinet; the cabinet records that request and then shows the store's resulting
+state. The cabinet **never approves, never executes and never predicts** a refund — approval happens
+in the ocStore admin by a person, and the money moves through the Yandex payment module's own refund
+path. Until that approval exists, the only truthful thing to display is the request's own status
+(which is not a payment state and must never be shown as one).
+
 **The monetary display is for real commerce only.** Do **not** show the value of a free AI Repair
 entitlement in rubles; do not display a 150 ₽ credit, a token balance or a monetary wallet. The
 store's actual product prices and order totals are unaffected by this rule — they are legitimate
@@ -674,17 +681,52 @@ Before anything is deployed, and in parallel with Round 9:
 
 1. **Fix F1–F4** and **delete the `x-customer-id` path** (see `REVIEW_2026-10-12.md`).
 2. **`oc_session`** — its real shape, and the real cookie name (`OCSESSID` is currently only an
-   assumption).
+   assumption). **Shape confirmed 2026-10-12:** `session_id varchar(32) PK`, `data text`,
+   `expire datetime` (a second `oc_api_session` table belongs to the API module). The **cookie name
+   is still unverified**.
 3. **Does the «AI-ремонт» product exist?** If not, create it: 150 ₽, `tax_class_id = 0`,
    **non-shippable** (`oc_product.shipping = 0`), `subtract` left at 0.
+   **`AI-REMONT-150`**. **DONE LIVE 2026-10-12** — it did **not** exist (0 product names start with
+   `AI`). Created as **`Ai Ремонт`** (product_id **65882**), SKU `AI-REMONT`, model `AI-REMONT-150`,
+   **150 ₽**, `shipping = 0`, `subtract = 0`, `tax_class_id = 0`, quantity 1, weight 0,
+   **enabled (status = 1)**, image `catalog/products/ai-remont-150.png`, in the new **top-level
+   category «Услуги» (1119)**. `oc_product.shipping`/`.subtract` **default to 1** and `tax_class_id`
+   to NULL, so a default insert would have created a shippable, stock-decrementing product — they were
+   set explicitly. Verified: DB read-back (HEX) decodes to «Ai Ремонт» / «Услуги», product and
+   category pages HTTP 200, image HTTP 200 (13 919 B), `verify_scope` **IDENTICAL**,
+   `maintenance_health_check` ok. Script: `_svc_live.py` (plan-by-default, scoped inserts);
+   rollback = `DELETE` on ids 1119 + 65882 across the five tables \(+ the image file).
+   The product image is a **generated placeholder** — replace it with a real one.
 4. **The live `sessions.py` schema** — `media`, `basket`, `sessions`. The copy in this workspace is
-   stale; do not build on it.
+   stale; do not build on it. **Partial 2026-10-12:** there are **no `media` or `basket` tables in
+   MySQL at all** — the app keeps them in its own SQLite
+   (`ANDREY_FUNNEL_DB = /root/aim/app/funnel_state.db`), which is the F3 finding. The live
+   `sessions.py` itself still needs reading.
 5. **`oc_order_history` / `oc_return`** — do they exist and are they populated? They have **zero
    references** in our entire codebase, and the "returns are their own events" rule depends on them.
+   **ANSWERED 2026-10-12: both exist and are populated** — `oc_order_history` **113 rows**,
+   `oc_return` **28 rows**, plus `oc_return_history` / `_action` / `_reason` / `_status`. The
+   "returns are their own events" rule **is buildable on real data**.
 6. **The Yandex payment module** — its exact directory name and the refund path it exposes.
+   **Code confirmed 2026-10-12: `yoomoney`** (alongside `yoomoney_b2b_sberbank`, `cod`,
+   `free_checkout`; shipping modules are `dostavista`, `flat`, `pickup`, `yandexdelivery`,
+   `yandexdeliveryexpress`). **Refund ruling (owner, 2026-10-12): a refund is *requested* by the
+   customer and *approved by a human inside ocStore*** — the cabinet never approves, executes or
+   predicts one (§13).
 7. **The second CRM** (`/var/www/hi5.bike/crm/`) — its schema and the **join key** to
    `oc_customer` / `oc_order` (A9).
+   **ANSWERED 2026-10-12: it lives in the same database** — `oc_crm_job` (`job_id`, `client_name`,
+   `client_phone`, `bike`, `status`, `notes`, `price_total`, `price_manual`, `discount_pct`, `paid`,
+   `created_at`, `updated_at`), plus `oc_crm_job_item`, `_log`, `_message`, `_photo`, `_service`,
+   `_setting`, `_user`. There is **no `customer_id` and no `order_id`** — the only link to
+   `oc_customer` / `oc_order` is **`client_phone`** (indexed), with `client_name` a weak secondary.
+   ⚠ A phone join is fragile (a shared or family number cross-links customers) and it collides with
+   "a customer cannot retrieve another customer's records" — it needs an explicit decision, and it is
+   entangled with the guest→customer merge (item 8).
 8. **Guest orders** — confirm the 187/209 figure and define the merge path (A8, B10).
+   **CONFIRMED 2026-10-12: 209 orders, 187 with `customer_id = 0`** (1281 registered customers). The
+   merge path itself is still undefined — and it is entangled with the phone-join warning under
+   item 7.
 9. **`purge_media`** — confirm there is no call site, then remove the policy (B15).
 10. **B16** — the search-index leak: `_ar_kb_build.py` ingests every top-level `.md` in the chat
     root with no PII detector. Keep this spec inside the repo, never loose in the chat root.
