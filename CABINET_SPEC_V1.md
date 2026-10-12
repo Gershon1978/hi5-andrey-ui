@@ -680,6 +680,12 @@ client), not part of this round.
 Before anything is deployed, and in parallel with Round 9:
 
 1. **Fix F1–F4** and **delete the `x-customer-id` path** (see `REVIEW_2026-10-12.md`).
+   **DONE 2026-10-12** — fixed and version-controlled in the private repo
+   **`hi5-andrey-server`** (commit `e74a52d`): the `x-customer-id` path is **deleted**, not
+   merely gated; ocStore reads go over `pymysql` (F3) with **no DDL at import**; F1's rebind is
+   gone; the A7 scope lock is resolved **server-side** from the stored verdict (F5); F4's patch is
+   staged in `ops/ai-mechanic-watch-F4.patch`. Not deployed — the cabinet route is still absent
+   from the live relay allowlist, so the bypass was latent, not exploitable.
 2. **`oc_session`** — its real shape, and the real cookie name (`OCSESSID` is currently only an
    assumption). **Shape confirmed 2026-10-12:** `session_id varchar(32) PK`, `data text`,
    `expire datetime` (a second `oc_api_session` table belongs to the API module). The **cookie name
@@ -728,8 +734,19 @@ Before anything is deployed, and in parallel with Round 9:
    merge path itself is still undefined — and it is entangled with the phone-join warning under
    item 7.
 9. **`purge_media`** — confirm there is no call site, then remove the policy (B15).
+   **DONE 2026-10-12** — no call site confirmed; `purge_media()` and the docstring that stated
+   the delete-policy as a design goal are **removed** from the canonical `mechanic/sessions.py`
+   (`record_media()` — the index of what we hold — survives). The live copy still carries the
+   dormant method; remove it with the next deploy.
 10. **B16** — the search-index leak: `_ar_kb_build.py` ingests every top-level `.md` in the chat
     root with no PII detector. Keep this spec inside the repo, never loose in the chat root.
+    **DONE (scrub) 2026-10-12 — the leak was real and larger than described:** the **live MySQL
+    bridge token** and the **FTP password** sat in **12 documents (35 occurrences)** that the
+    knowledge RAG ingests, including both copies of `_SESSION_REFERENCE.md` — the bridge token is
+    full read/write database access. All 35 were redacted and re-verified (0 remaining; backups at
+    `WORKSPACE\_b16_backup_*`). ⚠ **Rotate the bridge token** — it was retrievable, so treat it as
+    disclosed. Still to do: wire a secret/PII **detector into the ingest path** so this cannot
+    recur, and keep customer phone numbers out of handoff notes (two docs still carry them).
 
 ---
 
