@@ -68,4 +68,53 @@ Then remove `image/catalog/products/ai-remont-150.png` and clear caches. The MCP
 * The product image is a **generated placeholder** (plain navy tile) — replace with a real one.
 * `top = 0`: «Услуги» is **not** in the storefront menu. Flip with one `UPDATE` if it should be.
 * `noindex = 1` follows the convention of all 91 pre-existing categories.
-* The MCP asked for `_CATALOG_SIZE_HINT` (top of its `server.py`) to be bumped after a deliberate add — the file was not found under `Documents\Cline`; locate and bump it.
+## Part 2 — «Услуги» built from the CRM price list (2026-10-12)
+
+**Why.** The locked rule says the 150 ₽ AI fee credits toward *parts or workshop work* — so the
+workshop's work had to exist as purchasable items before that credit could ever be redeemed.
+`CABINET_SPEC_V1.md` §A3 also needs a storefront checkout path.
+
+**Source of truth.** `oc_crm_service` — the workshop's own price list: **23 active services**
+(`code`, `name`, `grp`, `price_base`, `price_diff`, `sort`). Nothing was invented: names are copied
+**server-side** (so Cyrillic never round-trips through a client charset), SKUs are the CRM codes,
+and the price range `price_base – price_diff` goes into the description verbatim.
+
+**Before → after**
+
+| | before | after |
+|---|---|---|
+| «Услуги» (1119) products | 1 (the AI fee) | **24** — the AI fee + 23 services |
+| live catalogue | 6314 | **6337** (local mirror identical) |
+| new ids | — | **65883 … 65905** |
+| every service | — | `shipping=0`, `subtract=0`, `tax_class_id=0`, qty 1, `status=1` |
+
+**Groups covered:** Простая (7 × 300–500 ₽) · Обычная (8 × 600–1000 ₽) · Экспертная (6 × 1000–2000 ₽) ·
+Сборка (детский 1500 ₽ / взрослый 2500 ₽).
+
+**Verified**
+* `_svc_build.py` self-check → `category 1119 now holds 24 product(s)`, `flag anomalies: none`, and all
+  24 names decode as correct UTF-8 (read back with `HEX()`).
+* MCP `verify_scope(category="Услуги")` → **VERDICT: IDENTICAL** (24 live / 24 local, 0 mismatches).
+* Rendered category page: title «Услуги», **24 cards**, 23 placeholder images **0 broken / 23 loaded**.
+* Image `uslugi-placeholder.png` → HTTP 200 (16 272 B); descriptions normalised to whole rubles
+  (`UPDATE ... affected_rows: 23`); caches cleared; `maintenance_health_check` → `ok: true`.
+
+**Rollback**
+```sql
+DELETE FROM oc_product             WHERE product_id BETWEEN 65883 AND 65905;
+DELETE FROM oc_product_description WHERE product_id BETWEEN 65883 AND 65905;
+DELETE FROM oc_product_to_category WHERE product_id BETWEEN 65883 AND 65905;
+DELETE FROM oc_product_to_store    WHERE product_id BETWEEN 65883 AND 65905;
+```
+Then remove `image/catalog/products/uslugi-placeholder.png` and clear caches.
+
+**Open items for this category**
+* **Images are one shared placeholder** — 23 services point at `uslugi-placeholder.png`. Replace per
+  service with real workshop photos (the playbook's rule 1: never overwrite a live file; upload a new name).
+* **Two price authorities now exist** — the CRM holds the authoritative service prices and ocStore
+  mirrors them. A CRM price change does **not** propagate; a small sync (CRM → ocStore) is needed, or the
+  drift will be silent. This is the one architectural debt this build introduces.
+* **Groups** — the CRM's `grp` (Простая / Обычная / Экспертная / Сборка) is only in the description;
+  sub-categories would need 4 more categories (7 statements each) and are not created.
+* **Menu** — «Услуги» is still `top=0` (not in the storefront menu). One `UPDATE` flips it.
+
