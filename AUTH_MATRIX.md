@@ -166,10 +166,17 @@ from the relay one: the relay was an open proxy; this was an ungated router.
 4. **Single worker.** The brake's ledger *and* its reservations are per-process; the state machine
    is multi-worker-safe (SQLite + CAS). `--workers N` would multiply the cap by N.
 5. **The cap is only as tight as `_RESERVE_RUB`** (`media` 25 ₽, `expensive` 12 ₽) — evidence, not proof.
-6. **The full media happy path was not run end-to-end** (it needs a real video, a camera and money).
-   Proven instead: the gate order, the cookie transport, the transitions (unit), and that an upload
-   does reach the brain through the relay (its ffprobe rejection came back at 19:15). The unproven
-   step is a real video producing S1→S2 over HTTP.
+6. ~~**The full media happy path was not run end-to-end.**~~ **CLOSED 2026-10-12 (Test B).**
+   A real 8.62 s clip (`_uploads/s_rIW1as_1791806270832.mov`, h264 480×360 + audio) was uploaded
+   through the production relay: `POST /relay/api/passport` → 200 + `Set-Cookie` + `gate: pass`
+   (confidence 93) → `POST /relay/api/flow` → 200, and the live DB read back **`stage=2`** for that
+   sid. Verdict: 3 causes (`s10_pads` 85, `s16_bb` 75, `s07_tune` 70), every `job_code` resolving
+   to the live menu, `gate: verdict` at 85 ≥ 80, no invented services or parts. Cost, read from the
+   service's own `/api/ledger`: 11 calls / 25.50 ₽ for the whole process (7 diagnoses), i.e. a full
+   video diagnosis ≈ **4–6 ₽** — well inside the 25–37 ₽ guess. Evidence:
+   `REVIEW_2026-10-12_testB_media-path.md`.
+   *Still open:* the ffprobe-rejection branch with a **valid S1** session (the failure case was
+   refused earlier, by the stage gate, which is fail-closed but does not exercise the validator).
 7. The **fitment contract** (`RELAY_BOUNDARY.md` §5) is still a contract, not code.
 
 ## 6 · WHAT THE TESTS CAUGHT (why they were worth writing)
@@ -188,5 +195,40 @@ from the relay one: the relay was an open proxy; this was an ungated router.
    Fixed with a middleware that mutates the real outgoing response.
 4. **`handoff` costs 0 ₽** (`build_verdict(..., use_model=False)` by default) — which is why it was
    the right free route for the positive/replay/parallel tests, and why the suite cost nothing.
+
+## 7 · THE REPLAY GUARD (added 2026-10-11) — and what Test B found in it
+
+The relay answers some requests **without reaching the handler**:
+```python
+_REPLAY_TTL = 300.0                                   # 5 minutes
+_rk = _replay_key(path, request, body)                # (path, cookie, body-hash)
+_hit = _replay_get(_rk)
+if _hit is not None:
+    return Response(content=_rb, status_code=_st, media_type=_ct)   # cached: no handler
+```
+Purpose, and it is a good one: a dropped response must not make the client re-run a paid call
+(double charge). Measured behaviour (Test B, live):
+* an **identical repeat** is replayed in ~0.20 s — no handler, **no counter movement, no spend**;
+* the replayed response carries the cached body/status/content-type but **not `Set-Cookie`**;
+* the key includes the cookie, so once a session exists the guard is session-scoped.
+
+**Consequence 1 — the cookie-less first call collides (defect D1).** A session's first call
+(`passport`/`capture/check`) has **no cookie**, so all such requests with the same body inside 5
+minutes share a key: a second visitor receives the **first visitor's cached body, including their
+`session_id`**, and no cookie — then 401s on the next step. Observed live (session B was handed
+session A's sid). Not exploitable (a sid alone is not a capability), but it breaks the first step
+for anyone typing an already-used model name, and it leaks another session's id.
+*Fix:* skip the guard when the cookie is empty, and never replay a response that mints state.
+
+**Consequence 2 — the `n_verdict` 409 is unreachable (defect D2).** Repeating the same costed
+verdict body returns the cached 200, never the documented 409, so the client cannot learn from the
+server that the model verdict was already used. Money is safe; the *contract* is not. The PASS
+recorded above as "verdict #1 ✓ #2 refused" is therefore **stale** — it predates this guard. The
+cap itself is intact and was re-verified with the handler in the path (`bump()` 0→1 in 3.43 s,
+spend recorded).
+
+*For the paid routes (A):* the guard is **desirable** on `ar/pay`/`ar/commit` (a retried payment
+call must not charge twice). It is only dangerous where a body omits the session id, so every paid
+request must carry both its cookie and its session id in the body.
 
 
