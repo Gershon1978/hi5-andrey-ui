@@ -16,7 +16,10 @@ type AppState =
   | "TICKET"
   | "PARTS"
   | "AR_GUIDE"
-  | "CABINET";
+  | "CABINET"
+  // The FREE e-scooter lane: the class gate refused the clip (`not_a_bicycle`) and we offer
+  // a typed display code instead. No price, no paid guide, no booking.
+  | "SCOOTER";
 
 
 const BLUEPRINT_LABELS: Record<string, string> = {
@@ -80,6 +83,19 @@ function BicycleIcon({ className = "icon" }: { className?: string }) {
       <circle cx="18.5" cy="17.5" r="3.5" />
       <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5L8.5 9H12l3 4.5h3.5" />
       <path d="M5.5 17.5 10 9" />
+    </svg>
+  );
+}
+
+function ScooterIcon({ className = "icon" }: { className?: string }) {
+  return (
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5" cy="18" r="2.5" />
+      <circle cx="19" cy="18" r="2.5" />
+      <path d="M7.5 18h9" />
+      <path d="M12 18V8h4l2 7" />
+      <path d="M15 6h3" />
+      <path d="M9 12h3" />
     </svg>
   );
 }
@@ -197,6 +213,15 @@ export default function App() {
   const [previousState, setPreviousState] = useState<AppState>("VERDICT");
   const [openCreditsCount, setOpenCreditsCount] = useState<number>(0);
 
+  // ── the FREE e-scooter lane ───────────────────────────────────────────────
+  // The class gate answers `lane: "scooter_free"` + `gate: "not_a_bicycle"` for a scooter
+  // (or a non-vehicle frame). Everything paid is then OFF the table — no verdict, no offer,
+  // no booking — and the only intake is a typed code from the display.
+  const [refusal, setRefusal] = useState<any>(null);
+  const [codeQuery, setCodeQuery] = useState("");
+  const [codeResult, setCodeResult] = useState<any>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+
   // File input refs
   const bikeVideoInputRef = useRef<HTMLInputElement>(null);
   const problemVideoInputRef = useRef<HTMLInputElement>(null);
@@ -211,6 +236,12 @@ export default function App() {
         if (c?.credits_open) setOpenCreditsCount(c.credits_open);
       })
       .catch(() => {});
+    // Review hook (`?mock=1&lane=scooter`): open the free scooter lane with no API spend, so
+    // the screen can be reviewed in a browser without uploading a clip.
+    if (new URLSearchParams(location.search).get("lane") === "scooter") {
+      adoptRefusal({ gate: "not_a_bicycle", lane: "scooter_free", vehicle_class: "e_scooter" },
+                   { lane: "scooter_free", gate: "not_a_bicycle" });
+    }
   }, []);
 
   // Timer for long-running calls
@@ -229,6 +260,42 @@ export default function App() {
     };
   }, [busy]);
 
+  // Adopt the gate's refusal, wherever it appears (passport / flow / a 409). Returns true when
+  // the session is a scooter free-lane session, so the caller can stop doing bicycle work.
+  function adoptRefusal(passportLike: any, envelope?: any): boolean {
+    const lane = envelope?.lane ?? passportLike?.lane;
+    const gate = envelope?.gate ?? passportLike?.gate;
+    if (lane !== "scooter_free" && gate !== "not_a_bicycle") return false;
+    setRefusal({
+      lane: lane || "scooter_free",
+      gate: gate || "not_a_bicycle",
+      vehicle_class: passportLike?.vehicle_class ?? envelope?.vehicle_class ?? "",
+      message: envelope?.message || passportLike?.message || "",
+    });
+    // Nothing bicycle-shaped may survive into a state that can offer a paid path.
+    setPassport(null);
+    setFlowResult(null);
+    setProblemVideo(null);
+    setCodeResult(null);
+    setErr(null);
+    setState("SCOOTER");
+    return true;
+  }
+
+  async function handleAskCode() {
+    const q = codeQuery.trim();
+    if (!q || codeBusy) return;
+    setCodeBusy(true);
+    setErr(null);
+    try {
+      setCodeResult(await api.scooterCode(q, model.trim()));
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
   // When bike video is chosen: immediately trigger /api/passport in background
   async function handleBikeVideoSelected(filesList: FileList | null) {
     if (!filesList || filesList.length === 0) return;
@@ -240,6 +307,9 @@ export default function App() {
     setPassportLoading(true);
     try {
       const p = await api.passport([file], model, true);
+      // The class gate may refuse the clip outright (a scooter, or a frame with no vehicle
+      // in it): then there is no bicycle identity to show and no paid lane to enter.
+      if (adoptRefusal(p?.passport || p, p)) return;
       const resolved = p.passport || p;
       setPassport(resolved);
       if (resolved?.identity?.make || resolved?.identity?.model) {
@@ -277,6 +347,7 @@ export default function App() {
       const modelText = model || passport?.identity?.model || "";
       const res = await api.flow([file], symptomText, modelText);
       setFlowResult(res);
+      if (adoptRefusal(res?.passport, res)) return;
 
       if (res?.passport && !passport) {
         setPassport(res.passport);
@@ -289,6 +360,9 @@ export default function App() {
         setState("VERDICT");
       }
     } catch (e: any) {
+      if (e?.code === "not_a_bicycle" || e?.data?.code === "not_a_bicycle") {
+        if (adoptRefusal({ gate: "not_a_bicycle", lane: "scooter_free" }, e.data)) return;
+      }
       setErr(e.message || String(e));
     } finally {
       setBusy(false);
@@ -395,6 +469,12 @@ export default function App() {
       }
     } catch (e: any) {
       if (e instanceof ApiRefusalError) {
+        // The class gate's refusal, wherever it surfaces (verdict / commit): the free lane.
+        if (e.code === "not_a_bicycle") {
+          adoptRefusal({ gate: "not_a_bicycle", lane: "scooter_free",
+                         vehicle_class: e.data?.vehicle_class }, e.data);
+          return;
+        }
         // Spec B5 & Refusal handling:
         // 402 payment_required -> return to offer with pay_url
         if (e.status === 402) {
@@ -505,6 +585,10 @@ export default function App() {
     setBusy(false);
     setErr(null);
     setPartsOrdered(false);
+    setRefusal(null);
+    setCodeQuery("");
+    setCodeResult(null);
+    setCodeBusy(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -982,9 +1066,149 @@ export default function App() {
       )}
 
       {/* =========================================================================
+          S6: SCOOTER (free lane). The class gate refused the clip — either an e-scooter or a
+          frame with no vehicle in it. No price, no paid guide, no booking: a typed display
+          code is the only intake, answered from the canonical scooter list.
+          ========================================================================= */}
+      {state === "SCOOTER" && (
+        <>
+          <div className="speech-bubble">
+            {refusal?.vehicle_class === "e_scooter"
+              ? "«Это самокат — AI-ремонт велосипедов тут не подходит. Но по коду с дисплея дам бесплатную справку.»"
+              : "«На видео не байк. Если это самокат — введите код с дисплея, справка бесплатная.»"}
+          </div>
+
+          <div className="card-unit">
+            <span className="badge-tag"><ScooterIcon /> Самокат · бесплатная справка</span>
+            <div style={{ fontSize: "14px", color: "var(--muted)", margin: "8px 0 12px" }}>
+              {refusal?.message ||
+                "Для самокатов мы не продаём AI-гид: только справка и, если нужно, запись в мастерскую."}
+            </div>
+
+            {!showModelInput ? (
+              <button
+                type="button"
+                className="micro-link"
+                style={{ marginBottom: "10px" }}
+                onClick={() => setShowModelInput(true)}
+              >
+                Указать марку самоката
+              </button>
+            ) : (
+              <div className="ambient-field" style={{ marginBottom: "10px" }}>
+                <input
+                  type="text"
+                  placeholder="Марка (напр. Dualtron, Kugoo, Xiaomi)"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="ambient-field">
+              <input
+                type="text"
+                placeholder="Код с дисплея (напр. E2 или «ошибка Е2»)"
+                value={codeQuery}
+                onChange={(e) => setCodeQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAskCode();
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="ambient-toggle"
+              style={{ marginTop: "12px" }}
+              onClick={handleAskCode}
+              disabled={codeBusy || !codeQuery.trim()}
+            >
+              {codeBusy ? "Смотрим в базе…" : "Что значит этот код?"}
+            </button>
+          </div>
+
+          {codeResult && (
+            <div className="card-unit">
+              {Array.isArray(codeResult.advice) && codeResult.advice.length > 0 ? (
+                <>
+                  <span className="badge-tag"><CheckIcon /> Нашли в базе</span>
+                  {codeResult.advice.length > 1 && (
+                    <div style={{ fontSize: "14px", marginTop: "8px" }}>
+                      В нашей базе у этого кода несколько значений — сверьтесь с моделью
+                      самоката:
+                    </div>
+                  )}
+                  {codeResult.advice.map((a: any, i: number) => (
+                    <div key={i} style={{ marginTop: "12px" }}>
+                      <div style={{ fontSize: "18px", fontWeight: 700 }}>
+                        Код {a.code}
+                        {a.severity === "critical" ? " · критичный" : ""}
+                        {a.system && a.system !== "unknown" ? ` · ${a.system}` : ""}
+                      </div>
+                      <div style={{ fontSize: "15px", marginTop: "6px" }}>{a.what_it_means}</div>
+                      {a.likely_cause && (
+                        <div style={{ fontSize: "14px", color: "var(--muted)", marginTop: "6px" }}>
+                          Причина: {a.likely_cause}
+                        </div>
+                      )}
+                      {a.what_to_check && (
+                        <div style={{ fontSize: "14px", marginTop: "6px" }}>
+                          Что проверить: {a.what_to_check}
+                        </div>
+                      )}
+                      {a.safety && (
+                        <div style={{ fontSize: "14px", marginTop: "6px", color: "#c0392b" }}>
+                          {a.safety}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ fontSize: "13px", color: "var(--muted)", marginTop: "14px" }}>
+                    {codeResult.note}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="badge-tag">
+                    {codeResult.status === "ambiguous_brand" ? "Нужна марка" : "Нет в базе"}
+                  </span>
+                  <div style={{ fontSize: "15px", marginTop: "8px" }}>
+                    {codeResult.message}
+                  </div>
+                  {Array.isArray(codeResult.brands) && codeResult.brands.length > 0 && (
+                    <div className="tags-row">
+                      {codeResult.brands.map((b: string, i: number) => (
+                        <span key={i} className="pill-tag">{b}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {err && (
+            <div className="card-unit" style={{ borderColor: "#c0392b" }}>
+              <div style={{ fontSize: "14px" }}>{err}</div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="micro-link"
+            style={{ marginTop: "16px", display: "inline-flex", gap: "6px" }}
+            onClick={handleReset}
+          >
+            <ArrowLeftIcon /> Начать заново
+          </button>
+        </>
+      )}
+
+      {/* =========================================================================
           MORPHING ACTION UNIT (Named Component: orbit_shutter / dual_pill / ring / typing)
           ========================================================================= */}
-      {state !== "VERDICT" && state !== "AR_GUIDE" && state !== "CABINET" && (
+      {state !== "VERDICT" && state !== "AR_GUIDE" && state !== "CABINET" && state !== "SCOOTER" && (
         <footer className="action-dock">
           <div className="action-dock-inner">
             {/* INTRO state: Orbit Shutter */}

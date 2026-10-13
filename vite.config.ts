@@ -27,6 +27,21 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // HOST-NEUTRAL BY DESIGN — the base is deliberately NOT set here. This one source tree is
+    // deployed to TWO hosts with different mount points:
+    //
+    //   AI Studio Build (Cloud Run)   served at "/"         -> `npm run build`
+    //   hi5.bike/Andrey/ (the brain)  served at /Andrey/    -> `npm run build:selfhosted`
+    //                                                          (= vite build --base=/Andrey/)
+    //
+    // Why the production build must be /Andrey/: that host serves this bundle from the brain's
+    // web/static/ and nginx strips the prefix. With ROOT-absolute asset URLs the browser resolves
+    // /assets/… against the SHOP root, where the catch-all answers 200 text/html, so the module
+    // script dies with a MIME-type error and the page never boots. (Measured 2026-10-13.)
+    //
+    // Do NOT hardcode /Andrey/ here: that silently breaks the AI Studio preview, which is served
+    // from the Cloud Run ROOT. _deploy_spa.py builds with build:selfhosted and asserts the
+    // artifact really carries /Andrey/assets/… before uploading, so the flag cannot be forgotten.
     server: {
       host: "0.0.0.0",
       port: 3000,

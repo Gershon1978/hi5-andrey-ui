@@ -287,3 +287,18 @@ and an in-page `fetch(__ANDREY_BASE__ + '/api/health')` returns the live brain p
 **Any future SPA deploy must re-apply that injection** — it is not part of the Vite output.
 Rollback: `/root/aim/backup_ui_ask_20261010_214512.tar.gz`.
 
+**A second deploy-time trap, measured 2026-10-13 (the free-scooter-lane deploy).** The bundle
+must reference its assets as `/Andrey/assets/…`, never as root-absolute `/assets/…`: the app is
+mounted under `/Andrey/`, so a root-absolute URL is fetched from the SHOP root, where the
+shop's catch-all answers `200 text/html` and the module script dies with
+*«Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of
+"text/html"»* — the page never boots (found in a real browser, not in curl: `curl` on the
+asset URL returned 200 either way). This is now fixed at the source — `vite.config.ts` sets
+`base: "/Andrey/"` — so the built `index.html` carries the correct form itself. Verify after
+every UI deploy, over the public URL:
+
+```bash
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+  https://hi5.bike/Andrey/assets/<hash>.js      # must be 200 text/javascript
+```
+

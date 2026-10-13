@@ -41,6 +41,63 @@ export const MOCK_GUIDE_RESPONSE: ArGuideResponse = {
   ],
 };
 
+// The FREE e-scooter lane — mirrors POST /api/scooter/code field-for-field, so the screen
+// can be developed and reviewed with zero API spend. Never carries a price or a paid guide.
+export const MOCK_SCOOTER_CODE: Record<string, any> = {
+  matched: {
+    ok: true,
+    lane: "scooter_free",
+    status: "matched",
+    paid_diy: false,
+    workshop_cta: true,
+    headline: "Справка по коду ошибки самоката (бесплатно)",
+    note: "Для самокатов мы не продаём AI-гид: это бесплатная справка, а при необходимости — запись в мастерскую.",
+    brand: "Dualtron",
+    scheme: "e_code",
+    brands: ["dualtron"],
+    advice: [
+      {
+        code: "E2",
+        code_normalized: "E002",
+        severity: "critical",
+        system: "controller",
+        what_it_means: "Неисправность контроллера (перегрев или пробой)",
+        likely_cause: "Перегрев контроллера под нагрузкой или пробой силовых ключей",
+        what_to_check: "Дайте остыть 15–30 минут; при повторе кода проверьте контроллер",
+        safety: "Не продолжайте поездку, если код повторяется",
+        source: "",
+      },
+    ],
+    matches: [{ brand: "Dualtron", brand_key: "dualtron", model: "", scope: "model", code: "E2" }],
+  },
+  ambiguous_brand: {
+    ok: true,
+    lane: "scooter_free",
+    status: "ambiguous_brand",
+    paid_diy: false,
+    workshop_cta: true,
+    headline: "Справка по коду ошибки самоката (бесплатно)",
+    note: "Для самокатов мы не продаём AI-гид: это бесплатная справка, а при необходимости — запись в мастерскую.",
+    message: "Такой код есть у нескольких марок — уточните марку самоката, и я дам точный ответ.",
+    brands: ["dualtron", "kugoo", "xiaomi"],
+    advice: [],
+    matches: [],
+  },
+  unknown: {
+    ok: true,
+    lane: "scooter_free",
+    status: "unknown",
+    paid_diy: false,
+    workshop_cta: true,
+    headline: "Справка по коду ошибки самоката (бесплатно)",
+    note: "Для самокатов мы не продаём AI-гид: это бесплатная справка, а при необходимости — запись в мастерскую.",
+    message:
+      "Этот код не нашёлся в нашей базе. Проверьте, что он считан с дисплея полностью, или опишите, что происходит, — и мы подскажем, стоит ли ехать в мастерскую.",
+    advice: [],
+    matches: [],
+  },
+};
+
 export const MOCK_CABINET_RESPONSE: CabinetResponse = {
   ok: true,
   customer_id: 1042,

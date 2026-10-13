@@ -13,7 +13,7 @@ import {
   RepairTicket,
   ChatAnswer,
 } from "./types/cabinet";
-import { MOCK_GUIDE_RESPONSE, MOCK_CABINET_RESPONSE } from "./mock/fixtures";
+import { MOCK_GUIDE_RESPONSE, MOCK_CABINET_RESPONSE, MOCK_SCOOTER_CODE } from "./mock/fixtures";
 import { MOCK_CABINET_PAYLOAD, MOCK_CHAT_ANSWERS } from "./mock/cabinet";
 
 const isMock =
@@ -124,6 +124,25 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+
+  // POST /api/scooter/code — the FREE e-scooter lane: a typed display code -> advice.
+  // No media, no LLM, no money: the brain only looks the code up in the canonical scooter
+  // list. This is the one input a scooter owner can always give us after the class gate
+  // has refused the clip (`not_a_bicycle`), so it is the intake for that lane.
+  scooterCode: async (code: string, brand = ""): Promise<any> => {
+    if (isMock) {
+      const c = code.trim().toUpperCase();
+      if (!c) return { ...MOCK_SCOOTER_CODE.unknown, query: code, status: "empty" };
+      if (c.includes("999")) return { ...MOCK_SCOOTER_CODE.unknown, query: code };
+      if (c === "E1" || !brand) return { ...MOCK_SCOOTER_CODE.ambiguous_brand, query: code };
+      return { ...MOCK_SCOOTER_CODE.matched, query: code, brand };
+    }
+    return jsonFetch(`${PROXY_BASE}/api/scooter/code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, brand }),
+    });
+  },
 
   // POST /api/ar/pay — hand off to ocStore order checkout (Spec A3 / B2)
   arPay: async (body: { session_id?: string; email?: string }): Promise<ArPayResponse> => {
