@@ -61,11 +61,16 @@
 	var open = document.getElementById("andrey-open");
 	var timer = null, ctl = null;
 
-	function plural(n, one, few, many) {
+	/* §6 wording, verbatim from the owner's ruling (2026-10-15): «Доступен 1 бесплатный ремонт»,
+	   «Использован», «Нет доступных бесплатных ремонтов». Never money, never a ruble balance. */
+	function freeRepairsText(n) {
 		var n10 = n % 10, n100 = n % 100;
-		if (n10 === 1 && n100 !== 11) { return one; }
-		if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) { return few; }
-		return many;
+		if (n <= 0) { return "Нет доступных бесплатных ремонтов"; }
+		if (n10 === 1 && n100 !== 11) { return "Доступен " + n + " бесплатный ремонт"; }
+		if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) {
+			return "Доступно " + n + " бесплатных ремонта";
+		}
+		return "Доступно " + n + " бесплатных ремонтов";
 	}
 	function line(id, html) {
 		var el = document.getElementById(id);
@@ -96,10 +101,7 @@
 		if (!d || d.ok !== true) { return; }
 
 		if (d.free_repairs && d.free_repairs > 0) {
-			var n = d.free_repairs;
-			line("andrey-line-entitlement", frag(txt("Доступно бесплатных ремонтов: "),
-				strong(String(n)), txt(" (" + n + " " +
-				plural(n, "бесплатный ремонт", "бесплатных ремонта", "бесплатных ремонтов") + ")")));
+			line("andrey-line-entitlement", frag(strong(freeRepairsText(d.free_repairs))));
 		}
 		if (d.last_job) {
 			var j = d.last_job;

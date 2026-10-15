@@ -23,7 +23,7 @@ interface CabinetScreenProps {
  * 0, 5-20, 25-30... -> «Доступно {N} бесплатных ремонтов» (или «Бесплатных ремонтов нет» при 0)
  */
 export function formatFreeRepairsPlural(count: number): string {
-  if (count <= 0) return "Бесплатных ремонтов нет";
+  if (count <= 0) return "Нет доступных бесплатных ремонтов";
   const mod10 = count % 10;
   const mod100 = count % 100;
   if (mod10 === 1 && mod100 !== 11) {

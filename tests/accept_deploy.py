@@ -52,7 +52,7 @@ def chk(name, ok, detail=""):
 def plural(n):
     """Mirror of CabinetScreen.formatFreeRepairsPlural (Section 5 of the brief)."""
     if n <= 0:
-        return "Бесплатных ремонтов нет"
+        return "Нет доступных бесплатных ремонтов"
     m10, m100 = n % 10, n % 100
     if m10 == 1 and m100 != 11:
         return "Доступен %d бесплатный ремонт" % n
