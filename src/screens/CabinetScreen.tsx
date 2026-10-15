@@ -44,6 +44,10 @@ export const CabinetScreen: React.FC<CabinetScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [is401, setIs401] = useState(false);
+  // The cabinet read route (GET /api/cabinet — spec A9/A10) is not deployed yet, so the relay
+  // answers 404. That is "not built", NOT a customer-facing failure: hold the screen instead of
+  // showing the raw "Not Found" string. Collapse this branch once A10 ships.
+  const [routeMissing, setRouteMissing] = useState(false);
 
   // Active section (5-section tabs)
   const [activeSection, setActiveSection] = useState<CabinetSection>("repairs");
@@ -73,6 +77,7 @@ export const CabinetScreen: React.FC<CabinetScreenProps> = ({
     let active = true;
     setLoading(true);
     setIs401(false);
+    setRouteMissing(false);
     api.cabinetPayload()
       .then((res) => {
         if (active) {
@@ -89,6 +94,10 @@ export const CabinetScreen: React.FC<CabinetScreenProps> = ({
           if (e instanceof ApiRefusalError && e.status === 401) {
             setIs401(true);
             setErr("Требуется авторизация в магазине hi5.bike");
+          } else if (e instanceof ApiRefusalError && e.status === 404) {
+            // Route not deployed yet (A9/A10) — a holding state, never an error banner.
+            setRouteMissing(true);
+            setErr(null);
           } else {
             setErr(e.message || "Ошибка загрузки кабинета");
           }
@@ -202,6 +211,21 @@ export const CabinetScreen: React.FC<CabinetScreenProps> = ({
       {loading && (
         <div className="card-unit" style={{ textAlign: "center", color: "var(--muted)", padding: "32px 16px" }}>
           Загрузка кабинета клиента…
+        </div>
+      )}
+
+      {routeMissing && !data && (
+        <div className="card-unit" style={{ textAlign: "center", padding: "32px 16px" }}>
+          <div style={{ fontWeight: 600, marginBottom: "8px" }}>Кабинет скоро откроется</div>
+          <div style={{ color: "var(--muted)" }}>
+            Мы заканчиваем сборку личного кабинета: здесь будут ваши велосипеды, история ремонтов,
+            запчасти и бонусные ремонты. Пока всё это можно спросить у Андрея в чате.
+          </div>
+          <div style={{ marginTop: "12px" }}>
+            <button type="button" className="btn-pill secondary" onClick={onBackToCurrent}>
+              Вернуться к ремонту
+            </button>
+          </div>
         </div>
       )}
 
