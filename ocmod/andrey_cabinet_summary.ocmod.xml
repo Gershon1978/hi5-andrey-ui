@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Surface A — the compact Andrey AI cabinet block on the ocStore account page.
+  Spec: CABINET_IMPLEMENTATION_BRIEF.md §2.A ("prefer an OCMOD modification rather than editing the
+  theme directly"; render a placeholder and fetch asynchronously; fail quietly).
+
+  ONE DELIBERATE DEVIATION FROM THE BRIEF'S TEXT, verified live 2026-10-15:
+  the brief says to fetch /Andrey/api/cabinet/summary. That path reaches the app DIRECTLY (nginx strips
+  /Andrey/ and proxies to :8140), so it hits the X-Andrey-Token gate and answers forever
+  {"ok":false,"error":"unauthorized"} — the token is a server secret and is never shipped to a browser.
+  The relay path /Andrey/relay/api/cabinet/summary injects the token server-side and answers 401
+  {"code":"identity_required"} only until the store session is present. So the block calls the RELAY.
+
+  Scope: the account page is authenticated-only in ocStore, and the block additionally stays hidden on
+  401/500/timeout, so nothing is ever shown to a visitor without a session.
+-->
+<modification>
+    <name>Andrey AI cabinet block (Surface A)</name>
+    <code>andrey_cabinet_summary</code>
+    <version>1.0.0</version>
+    <author>hi5.bike</author>
+    <link>https://hi5.bike/Andrey/</link>
+
+    <!-- `*` so the block follows the shop if the theme is ever switched (live theme: oct_ultrastore). -->
+    <file path="catalog/view/theme/*/template/account/account.twig">
+        <operation>
+            <search><![CDATA[<div class="content-top-box">{{ content_top }}</div>]]></search>
+            <add position="after"><![CDATA[
+<!-- Andrey AI cabinet (Surface A). Placeholder only: everything below is filled in, or stays hidden. -->
+<div id="andrey-cabinet" class="andrey-cab" style="display:none">
+	<div class="us-content-title">Кабинет AI-ремонт</div>
+	<div class="andrey-cab-body">
+		<div class="andrey-cab-line" id="andrey-line-entitlement" style="display:none"></div>
+		<div class="andrey-cab-line" id="andrey-line-job" style="display:none"></div>
+		<div class="andrey-cab-line" id="andrey-line-order" style="display:none"></div>
+		<div class="andrey-cab-note" id="andrey-note" style="display:none">
+			Ремонт по фото и видео: диагностика, паспорт велосипеда и ваша история работ.
+		</div>
+	</div>
+	<a id="andrey-open" class="andrey-cab-btn" href="/Andrey/">Открыть кабинет AI-ремонт &rarr;</a>
+</div>
+<style>
+#andrey-cabinet{background:#fff;border:1px solid #e6e9ef;border-radius:12px;padding:16px 18px;
+	margin:0 0 18px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+#andrey-cabinet .andrey-cab-body{margin:6px 0 14px}
+#andrey-cabinet .andrey-cab-line{color:#0B2545;font-size:14px;line-height:1.65}
+#andrey-cabinet .andrey-cab-line b{font-weight:600}
+#andrey-cabinet .andrey-cab-note{color:#6b7280;font-size:13px;line-height:1.55;margin-top:4px}
+#andrey-cabinet .andrey-cab-btn{display:inline-block;background:#007AFF;color:#fff;font-size:14px;
+	font-weight:600;padding:9px 16px;border-radius:9px;text-decoration:none}
+#andrey-cabinet .andrey-cab-btn:hover{background:#0068d8;color:#fff;text-decoration:none}
+@media (max-width:575px){#andrey-cabinet .andrey-cab-btn{display:block;text-align:center}}
+</style>
+<script>
+/* Fails quietly by construction: the container starts hidden and is only revealed on a good answer.
+   Any 401/500/timeout/parse error simply leaves the account page exactly as it was. */
+(function () {
+	"use strict";
+	var box = document.getElementById("andrey-cabinet");
+	if (!box) { return; }
+	var open = document.getElementById("andrey-open");
+	var timer = null, ctl = null;
+
+	function plural(n, one, few, many) {
+		var n10 = n % 10, n100 = n % 100;
+		if (n10 === 1 && n100 !== 11) { return one; }
+		if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) { return few; }
+		return many;
+	}
+	function line(id, html) {
+		var el = document.getElementById(id);
+		if (!el) { return; }
+		el.innerHTML = "";
+		el.appendChild(html);
+		el.style.display = "";
+	}
+	function txt(s) { return document.createTextNode(s); }
+	function strong(s) { var b = document.createElement("b"); b.appendChild(txt(s)); return b; }
+	function frag() {
+		var f = document.createDocumentFragment();
+		for (var i = 0; i < arguments.length; i++) { f.appendChild(arguments[i]); }
+		return f;
+	}
+
+	try { ctl = ("AbortController" in window) ? new AbortController() : null; } catch (e) { ctl = null; }
+	timer = setTimeout(function () { if (ctl) { try { ctl.abort(); } catch (e) {} } }, 2500);
+
+	var opts = { credentials: "same-origin", headers: { "Accept": "application/json" } };
+	if (ctl) { opts.signal = ctl.signal; }
+
+	fetch("/Andrey/relay/api/cabinet/summary", opts).then(function (r) {
+		if (!r.ok) { throw new Error("unavailable"); }
+		return r.json();
+	}).then(function (d) {
+		clearTimeout(timer);
+		if (!d || d.ok !== true) { return; }
+
+		if (d.free_repairs && d.free_repairs > 0) {
+			var n = d.free_repairs;
+			line("andrey-line-entitlement", frag(txt("Доступно бесплатных ремонтов: "),
+				strong(String(n)), txt(" (" + n + " " +
+				plural(n, "бесплатный ремонт", "бесплатных ремонта", "бесплатных ремонтов") + ")")));
+		}
+		if (d.last_job) {
+			var j = d.last_job;
+			line("andrey-line-job", frag(txt("Последний ремонт: "),
+				strong((j.date || "") + (j.what ? " — " + j.what : "")),
+				txt(j.status ? " · " + j.status : "")));
+		}
+		if (d.last_order) {
+			var o = d.last_order;
+			line("andrey-line-order", frag(txt("Последний заказ: "),
+				strong((o.date || "") + (o.what ? " — " + o.what : "")),
+				txt(o.status_label ? " · " + o.status_label : "")));
+		}
+		if (d.cabinet_url && open) { open.setAttribute("href", d.cabinet_url); }
+		box.style.display = "";
+	}).catch(function () {
+		clearTimeout(timer);
+		/* quiet by design: the store page must not learn that the brain is down */
+	});
+})();
+</script>
+]]></add>
+        </operation>
+    </file>
+</modification>
