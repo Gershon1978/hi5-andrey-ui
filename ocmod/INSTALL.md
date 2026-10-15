@@ -33,25 +33,62 @@ exempt from the token gate — that is why the direct path looks alive at a glan
 
 ## Install (owner, in the shop admin)
 
-1. **Back up the two things that matter** — the modifications table and the compiled tree:
+> **Readiness status (2026-10-15): rollback taken and PROVEN.** The compiled tree was backed up and a
+> rehearsal restored it into `/tmp` and compared it three ways (file count, canonical fingerprint,
+> per-file manifest) — all identical, so the archive is known-restorable *before* anyone clicks Refresh.
+> What is still outstanding before install: a maintenance window with the store closed to new checkouts,
+> and the post-install checklist below.
+
+### The canonical fingerprint (use this method, not the older one)
+
+```bash
+CANON() { (cd "$1" && find . -type f -exec md5sum {} \; | sort -k2 | md5sum | cut -d' ' -f1); }
+CANON /var/www/storage/modification
+```
+
+Running `find <absolute path> … | xargs md5sum | md5sum` gives a **different** number for an identical
+tree, because the hash covers the path text too — the first rehearsal failed for exactly that reason
+(live `82cbec33…` vs extract `8d195033…` on identical bytes). Use the version above, whose paths are
+relative.
+
+**Baseline recorded 2026-10-15, before install:**
+
+| item | value |
+|---|---|
+| tree | `/var/www/storage/modification` (`DIR_STORAGE=/var/www/storage/`) |
+| files / bytes | 390 / 4,564,267 |
+| canonical fingerprint | **`d8d4f00efb05ffca0af30bcc523910da`** |
+| (older, path-dependent) | `82cbec3336d080d7f49ffa2a4d7c1dbf` |
+| archive | `/root/aim/backups/modification_20261015_233738.tar.gz` (486,600 B) |
+| archive sha256 | `a9a823450a4818df32afe69be9952cbc8d0487b3b85c52a3b603e408f070e004` |
+| manifest | `/root/aim/backups/modification_20261015_233738.manifest.txt` (390 lines, path+md5) |
+| table dump | `/root/aim/backups/oc_modification_20261015_233738.sql` (5,242 B) |
+| modifications now | 4 rows (ids 1,2,4,7) — **no Andrey row**, i.e. not installed |
+| error.log to watch | `/var/www/storage/logs/error.log` (116,712 B at 2026-10-15 04:32) |
+
+### The window
+
+1. **Store baseline first** (recorded 2026-10-15): `/` 200, `?route=account/login` 200,
+   `?route=account/account` **302** for an anonymous visitor. Re-check all three immediately before the
+   install; if any differs, stop and investigate before changing anything.
+2. Take a fresh backup anyway (things may have moved since): re-run `_ocmod_rollback_kit.py`, which
+   re-proves the archive by extraction.
+3. Admin → Extensions → Installer: upload `andrey_cabinet_summary.ocmod.xml`.
+4. Admin → Extensions → Modifications: the row *"Andrey AI cabinet block (Surface A)"* appears →
+   **Refresh** (this is the step that regenerates the tree).
+5. Re-run the canonical fingerprint. Expect **more files** than 390 and a **changed** fingerprint, and
+   re-run the store baseline: all three routes as in step 1, plus `error.log` unchanged (or explainable).
+6. **The block, three ways:** logged-in customer (block shows, CTA works); logged-out visitor (ocStore
+   redirects to login, block unreachable; a direct fetch of the relay path must be 401 = hidden);
+   Andrey stopped (`systemctl stop ai-mechanic`) → account page renders normally and **no block**.
+7. If the refresh breaks the shop, restore:
 
    ```bash
-   mysqldump u0932575_default oc_modification > /root/oc_modification_before.sql
-   find /var/www/storage/modification -type f | sort | xargs md5sum | md5sum   # fingerprint
-   find /var/www/storage/modification -type f | wc -l                          # 390 on 2026-10-15
+   tar xzf /root/aim/backups/modification_<ts>.tar.gz -C /var/www/storage/modification
+   mysql u0932575_default < /root/aim/backups/oc_modification_<ts>.sql
+   # then admin -> Modifications -> Refresh (to rebuild from the restored rows)
    ```
 
-   Baseline before install: **390 files, 5.5 MB, fingerprint `82cbec3336d080d7f49ffa2a4d7c1dbf`.**
-
-2. Admin → **Extensions → Installer**: upload `andrey_cabinet_summary.ocmod.xml`.
-3. Admin → **Extensions → Modifications**: the row *"Andrey AI cabinet block (Surface A)"* appears →
-   press **Refresh** (the blue button). This is the step that regenerates the compiled tree.
-4. Re-run the fingerprint. Expect **more files** than 390 (the account template now has a compiled
-   entry), the fingerprint to change, and **zero** zero-byte files in `vqcache`.
-5. Open `https://hi5.bike/index.php?route=account/account` **logged in**. The block appears above the
-   account info, showing the order history already on the page underneath.
-6. Log out and open the account route: ocStore redirects to login, so the block is unreachable —
-   and even if it were fetched directly, it stays hidden on 401.
 
 ## Acceptance
 

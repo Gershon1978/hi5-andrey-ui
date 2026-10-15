@@ -10,6 +10,13 @@ export type CabinetStatus =
   | "delivered"
   | "returned"
   | "cancelled"
+  /**
+   * The source data does not establish a fulfilment state — ocStore's `order_status_id = 0` ("no
+   * status yet": 126 of the store's orders on 2026-10-15), an id no rule recognizes, or no label.
+   * A missing status is NOT evidence that an order is processing, so it must never render as
+   * «В обработке»; it renders as an explicit "not stated" instead.
+   */
+  | "unknown"
   /* repair-lifecycle statuses — used on Ремонт rows only, never on store rows */
   | "in_progress"
   | "done";
@@ -24,9 +31,11 @@ export const STATUS_LABEL: Record<CabinetStatus, string> = {
   delivered: "Доставлено",
   returned: "Возврат",
   cancelled: "Отменено",
+  unknown: "Статус не указан",
   in_progress: "В работе",
   done: "Завершён",
 };
+
 
 export type HistoryKind = "repair" | "recommendation" | "purchase" | "return";
 
