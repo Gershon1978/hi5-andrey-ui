@@ -139,7 +139,62 @@ Both revealed by the spec, both in the code deployed on 2026-10-15:
 
 `Просмотрено` and `Рекомендовано` cannot be produced at all until the diagnosis store exists (Q5).
 
-## 6 · How these AI sources were reached (so the next session does not re-derive it)
+## 6 · Argon's implementation map (2026-10-15) — and my review of it
+
+Argon (Gemini in AI Studio) produced a 158-line map from the attached brief + spec + live facts:
+`CABINET_IMPLEMENTATION_MAP_2026-10-15.md`. Recommended answers to the open decisions:
+
+| decision | Argon's recommendation |
+|---|---|
+| CRM join key | match on E.164 `client_phone` **only if the phone was verified** — otherwise keep CRM jobs empty |
+| guest merge | resolve **on read**: `customer_id = 0 AND (email = ? OR telephone = ?)` using the authenticated customer's own contacts |
+| bike ownership | allow multiple identical models (distinguished by nickname/`bike_id`); transfer only via an explicit serial/frame-hash claim, archiving the previous owner's passport |
+| ticket ↔ order | keep `ai_repair_job` independent with an **optional** `order_id`; never convert a ticket into an `oc_order` |
+| anonymous identity | the device session token (`andrey_s`) during diagnosis; ask for phone/login only at checkout or ticket save |
+
+Data-model shape: new `ai_repair_bike` / `ai_repair_job` / `ai_repair_event`; **deliberately NOT** creating
+`ai_repair_part` (reuse `basket` + `oc_order_product`) or `ai_repair_verification` (reuse `part_order`).
+Phase 1 = *the two defect fixes below*, which is the right first move.
+
+### Review — corrections and hazards (verify before building on any of it)
+
+**Wrong paths / wrong architecture (the same stale assumptions the spec carried):**
+
+1. **`mechanic/cabinet.py` does not exist** — nor does `main.py` / `routes.py`. The cabinet lives in
+   **`web/passport_api.py`** (router + `_RELAY_ROUTES`) and the app in **`web/server.py`**. "Extend
+   mechanic/cabinet.py" describes a file that would have to be invented first.
+2. **There is no nginx relay rewrite to configure.** `nginx -T | grep relay` returns nothing; the relay
+   is **app-level** (`web/server.py` handles `/relay/...` and refuses anything outside `_RELAY_ROUTES`).
+   The correct move is: the UI calls `/Andrey/relay/api/cabinet/summary` and the server adds
+   `"cabinet/summary"` to `_RELAY_ROUTES`. **No nginx change is needed or wanted.**
+3. **Do not add colour tokens.** Argon proposes adding `--brand: #007aff` etc. to `:root`; the Round 9
+   dispatch was explicit that the *existing* `:root` tokens are the working position and no colour may
+   be invented. Check `src/styles.css` first — it already uses `var(--navy)` / `var(--muted)` / `--wash`.
+
+**Unverified claims (asserted as fact, so they need checking):**
+
+4. **`part_order`** is presented as an existing funnel-DB table with `verified_at` / `verified_by` /
+   `status` / `note`. I have not verified that table exists on the box; the whole "reuse it instead of
+   creating `ai_repair_verification`" simplification rests on it.
+5. **YooMoney** is named as the payment gateway in the ownership table. Nothing in the repo's docs
+   confirms a gateway — the docs say *nothing processes payment* today.
+6. **"match confidence ≥ 80 %"** for showing an SKU/price is an invented threshold; the spec's §9 has a
+   verification *chain*, not a percentage. Needs a source or a ruling.
+
+**Real deploy hazard — Phase 2 (OCMOD):**
+
+7. The ocStore account block means installing a **modification into the shop**, which regenerates
+   `storage/modification` — the compiled tree that **C9 forbids clearing** (clearing it takes the shop
+   down; it was the 2026-10-01 outage's shape). The safe path is to install/refresh through the shop
+   admin with a backup and a fingerprinted compiled tree before and after, never a file-level edit.
+
+**Consequence worth stating plainly:** under Argon's own CRM rule (match only a *verified* phone), and
+with SMS explicitly out of scope, **no phone is ever verified — so CRM jobs stay empty.** That defers
+workshop integration rather than solving it, which is acceptable but should be a conscious choice, not
+a side effect.
+
+
+## 7 · How these AI sources were reached (so the next session does not re-derive it)
 
 * The `gemini-server` MCP needs a Chrome with CDP on **port 9222** using the dedicated profile
   `%USERPROFILE%\gemini-mcp-profile`. `C:\Users\Gershon\Documents\Cline\MCP\gemini-server\start_chrome.bat`

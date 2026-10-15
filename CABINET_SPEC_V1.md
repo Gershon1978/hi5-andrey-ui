@@ -21,26 +21,37 @@
 
 ---
 
-## ⚠ OPEN — one contradiction must be ruled on before §2 is built
+## ✅ RULED — 2026-10-15: the entitlement is a FREE REPAIR. No tokens.
 
-`Money/TODO.md` **A12** (opened 2026-10-11, **still `[ ]` open**) says the owner wants
-**tokens as a product inside ocStore**:
+The owner ruled in conversation: **"free repair. no tokens."** That settles the contradiction below in
+favour of the free-repair reading, so:
+
+* **A12 is struck** (no "tokens as a product inside ocStore", no token ledger).
+* **A6's `balance_due_rub = balance_rub − 150` is struck** (the 150 ₽ does not come off a parts balance).
+* §2, §7 (history rows), §9 (payments) and the "what the customer must not see" list all stand as
+  written: the entitlement is a **repair job**, never money, and it is never presented as money —
+  no «кредит», «баланс» or «токен» reaches the customer.
+
+The contradiction as it was recorded before the ruling is kept below for the audit trail.
+
+<details>
+<summary>Original ⚠ OPEN box (superseded)</summary>
+
+`Money/TODO.md` **A12** (opened 2026-10-11) wanted **tokens as a product inside ocStore**:
 
 > *"150 ₽ AI diagnostic fee is applied towards service visit 1-to-1, and with 100 % credit in
 > repair tokens where 150 repair tokens = 150 rub. … Let's introduce tokens as a product inside
 > ocStore. User buys tokens which we use inside the AI mechanic as AI tokens."*
 
-**A6** (answered the same day) adds that the 150 ₽ comes **off the parts balance**
+**A6** (answered the same day) added that the 150 ₽ comes **off the parts balance**
 (`balance_due_rub = balance_rub − 150`).
 
-Both describe the entitlement as **money**. The reward rule locked in this session says the
-opposite: *"the entitlement is a repair job, not money; no monetary wallet, no token balances."*
+Both describe the entitlement as **money**; the reward rule locked in that session said the opposite:
+*"the entitlement is a repair job, not money; no monetary wallet, no token balances."* The open action
+was: *"strike A12 + A6, or reinstate them and delete §2.2/§2.3."*
 
-**This file is written to the free-repair-job reading**, because it is the owner's most recent
-word. If A12 is in fact still live, then §2, §7 (history rows), §9 (payments) and the whole
-"what the customer must not see" list change, and the entitlement becomes a token ledger.
+</details>
 
-**Action before building §2:** strike A12 + A6, or reinstate them and delete §2.2/§2.3.
 
 ---
 
